@@ -1,1 +1,33 @@
 @import 'tailwindcss';
+
+/*
+ * TabDorm design tokens — single source of visual truth for every surface
+ * (side panel, popup, options). Never hardcode a hex value in a component.
+ */
+@theme {
+  --color-surface: #0a0c11;
+  --color-raised: #12151d;
+  --color-overlay: #1a1e28;
+  --color-line: #242a37;
+  --color-ink: #e8ebf2;
+  --color-dim: #9aa3b4;
+  --color-faint: #636c7e;
+  --color-accent: #6f7dff;
+  --color-accent-strong: #8b95ff;
+  --color-good: #34d399;
+  --color-warn: #f5b84c;
+  --color-bad: #f47174;
+}
+
+body {
+  background-color: var(--color-surface);
+  color: var(--color-ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Shared focus ring so keyboard navigation is visible on every control. */
+:where(button, input, select, textarea, [role='switch']):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}

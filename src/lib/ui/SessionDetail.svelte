@@ -8,13 +8,16 @@
     busyId: string | null;
     onBack: () => void;
     onRestore: (session: UnifiedSession) => void;
+    onRename: (session: UnifiedSession, name: string) => void;
+    onDelete: (session: UnifiedSession) => void;
   }
 
-  let { session, busyId, onBack, onRestore }: Props = $props();
+  let { session, busyId, onBack, onRestore, onRename, onDelete }: Props = $props();
 
   interface DetailRow {
     kind: 'window' | 'tab';
     label: string;
+    url?: string;
     tab?: StoredTab;
     groupColor?: string;
   }
@@ -28,6 +31,7 @@
         out.push({
           kind: 'tab',
           label: tab.title === '' ? tab.url : tab.title,
+          url: tab.url,
           tab,
           groupColor: tab.groupKey === undefined ? undefined : groupColors.get(tab.groupKey),
         });
@@ -42,7 +46,7 @@
       return rowsData.length;
     },
     getScrollElement: () => scrollEl ?? null,
-    estimateSize: () => 32,
+    estimateSize: () => 26,
     overscan: 12,
   });
   $effect(() => {
@@ -51,6 +55,7 @@
   });
   const rows = $derived($virtualizer.getVirtualItems());
   const total = $derived($virtualizer.getTotalSize());
+
   // Static class map — Tailwind cannot generate dynamic class names.
   const GROUP_DOT: Record<string, string> = {
     grey: 'bg-neutral-400',
@@ -67,36 +72,69 @@
   function groupDot(color: string): string {
     return GROUP_DOT[color] ?? 'bg-neutral-400';
   }
+
+  function commitRename(event: Event): void {
+    const input = event.currentTarget as HTMLInputElement;
+    const trimmed = input.value.trim();
+    if (trimmed === '' || trimmed === session.name) {
+      input.value = session.name;
+      return;
+    }
+    onRename(session, trimmed);
+  }
+
+  function exportSession(): void {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `tabdorm-session-${session.name.replace(/[^\w.-]+/g, '_')}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const BTN = 'rounded-md border border-line px-2 py-1 text-xs text-dim hover:border-faint hover:text-ink disabled:opacity-50';
 </script>
 
 <div class="flex min-h-0 flex-1 flex-col">
-  <div class="mb-1 flex items-center gap-2">
+  <div class="mb-1.5 flex items-center gap-1.5">
+    <button class="shrink-0 rounded-md border border-line px-2 py-1 text-xs text-dim hover:border-faint hover:text-ink" onclick={onBack}>←</button>
+    <input
+      class="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-sm font-medium text-ink hover:border-line focus:border-accent"
+      value={session.name}
+      onchange={commitRename}
+      onkeydown={(e) => {
+        if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+      }}
+      aria-label="Session name"
+      title="Click to rename"
+    />
+    <button class={BTN} onclick={exportSession}>Export</button>
     <button
-      class="rounded-md bg-neutral-800 px-2 py-1 text-xs hover:bg-neutral-700"
-      onclick={onBack}>← Sessions</button
+      class="rounded-md border border-bad/50 px-2 py-1 text-xs text-bad hover:bg-bad/10 disabled:opacity-50"
+      onclick={() => onDelete(session)}>Delete</button
     >
     <button
-      class="ml-auto rounded-md bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+      class="shrink-0 rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent-strong disabled:opacity-50"
       disabled={busyId !== null}
       onclick={() => onRestore(session)}>
-      {busyId === session.id ? 'Restoring…' : 'Restore session'}
-    </button>
+      {busyId === session.id ? 'Restoring…' : 'Restore'}</button
+    >
   </div>
-  <div bind:this={scrollEl} class="min-h-0 flex-1 overflow-y-auto rounded-lg border border-neutral-800 bg-neutral-900/60">
+  <div bind:this={scrollEl} class="min-h-0 flex-1 overflow-y-auto rounded-lg border border-line bg-raised/60">
     <div class="relative w-full" style="height:{total}px">
       {#each rows as row (row.key)}
         {@const item = rowsData[row.index]}
         {#if item}
-          <div class="absolute left-0 w-full px-2" style="transform:translateY({row.start}px)">
+          <div class="absolute left-0 w-full px-1.5" style="transform:translateY({row.start}px)">
             {#if item.kind === 'window'}
-              <p class="py-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">{item.label}</p>
-            {:else if item.tab}
-              <div class="flex h-7 items-center gap-2 rounded px-2 text-xs hover:bg-neutral-800/60">
+              <p class="py-1 pl-1.5 text-[10px] font-semibold uppercase tracking-wide text-faint">{item.label}</p>
+            {:else}
+              <div class="flex h-6 items-center gap-2 rounded px-1.5 text-xs hover:bg-overlay">
                 {#if item.groupColor}
                   <span class="h-2 w-2 shrink-0 rounded-full {groupDot(item.groupColor)}"></span>
                 {/if}
-                <span class="truncate text-neutral-300">{item.label}</span>
-                {#if item.tab.isDiscarded}<span class="ml-auto shrink-0 text-[10px] text-neutral-600">💤</span>{/if}
+                <span class="min-w-0 flex-1 truncate text-dim" title={item.url}>{item.label}</span>
+                {#if item.tab?.isDiscarded}<span class="ml-auto shrink-0 text-[10px] text-faint" title="Was asleep when snapshotted">💤</span>{/if}
               </div>
             {/if}
           </div>
@@ -105,4 +143,3 @@
     </div>
   </div>
 </div>
-

@@ -124,6 +124,20 @@ export async function deleteSession(id: string): Promise<void> {
   await db.sessions.where('id').equals(id).delete();
 }
 
+/** Renames a session in place; rejects empty names instead of silently storing them. */
+export async function renameSession(id: string, name: string): Promise<void> {
+  const trimmed = name.trim();
+  if (trimmed === '') throw new Error('Session name cannot be empty.');
+  await db.sessions.where('id').equals(id).modify({ name: trimmed });
+}
+
+/** Danger-zone op: removes every stored session. Returns how many were deleted. */
+export async function clearAllSessions(): Promise<number> {
+  const count = await db.sessions.count();
+  await db.sessions.clear();
+  return count;
+}
+
 /** Retention sweep — deletes sessions older than the cutoff timestamp. */
 export async function deleteSessionsOlderThan(cutoffTimestamp: number): Promise<number> {
   return db.sessions.where('timestamp').below(cutoffTimestamp).delete();

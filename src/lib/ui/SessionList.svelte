@@ -10,32 +10,40 @@
     loading: boolean;
     onSelect: (session: UnifiedSession) => void;
     onRestore: (session: UnifiedSession) => void;
+    onDelete: (session: UnifiedSession) => void;
     onLoadMore: () => void;
   }
 
-  let { sessions, busyId, hasMore, loading, onSelect, onRestore, onLoadMore }: Props = $props();
+  let { sessions, busyId, hasMore, loading, onSelect, onRestore, onDelete, onLoadMore }: Props = $props();
 
   let scrollEl: HTMLDivElement | undefined = $state();
+  let query = $state('');
+  let menuFor: string | null = $state(null);
+
+  const visible = $derived(
+    query.trim() === ''
+      ? sessions
+      : sessions.filter((s) => s.name.toLowerCase().includes(query.trim().toLowerCase())),
+  );
 
   const virtualizer = createVirtualizer({
     get count() {
-      return sessions.length;
+      return visible.length;
     },
     getScrollElement: () => scrollEl ?? null,
     estimateSize: () => 68,
     overscan: 8,
   });
 
-  // Keep the virtualizer's item count in lockstep with paginated data.
+  // Keep the virtualizer's item count in lockstep with filtered, paginated data.
   $effect(() => {
-    const count = sessions.length;
+    const count = visible.length;
     get(virtualizer).setOptions({ count });
   });
 
   const rows = $derived($virtualizer.getVirtualItems());
   const total = $derived($virtualizer.getTotalSize());
 
-  // Formatting kept out of the hot path so virtualizer rows stay cheap.
   function formatWhenLong(ts: number): string {
     return new Date(ts).toLocaleString();
   }
@@ -45,53 +53,116 @@
     if (type === 'auto_snapshot') return 'auto';
     return 'saved';
   }
+
+  function exportSession(session: UnifiedSession): void {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `tabdorm-session-${session.name.replace(/[^\w.-]+/g, '_')}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const BADGE: Record<UnifiedSession['type'], string> = {
+    user_saved: 'bg-good/15 text-good',
+    closed_window: 'bg-warn/15 text-warn',
+    auto_snapshot: 'bg-overlay text-faint',
+  };
 </script>
 
-<div bind:this={scrollEl} class="min-h-0 flex-1 overflow-y-auto rounded-lg border border-neutral-800 bg-neutral-900/60">
-  <div class="relative w-full" style="height:{total}px">
-    {#each rows as row (row.key)}
-      {@const session = sessions[row.index]}
-      {#if session}
-        <div
-          class="absolute left-0 w-full px-2 pb-2"
-          style="transform:translateY({row.start}px)"
-        >
-          <div
-            class="flex h-[60px] items-center justify-between gap-2 rounded-md border border-neutral-800 bg-neutral-900 px-3"
-          >
-            <button class="min-w-0 flex-1 text-left" onclick={() => onSelect(session)}>
-              <p class="truncate font-medium text-neutral-100">{session.name}</p>
-              <p class="text-xs text-neutral-400">
-                <span
-                  class="mr-1 inline-block rounded px-1 py-0.5 text-[10px] uppercase {session.type === 'user_saved'
-                    ? 'bg-emerald-900/60 text-emerald-300'
-                    : session.type === 'closed_window'
-                      ? 'bg-amber-900/60 text-amber-300'
-                      : 'bg-neutral-800 text-neutral-400'}">{typeBadge(session.type)}</span
-                >
-                {formatWhenLong(session.timestamp)} · {session.windows.length} window(s) · {session.windows.reduce((n, w) => n + w.tabs.length, 0)} tabs
-              </p>
-            </button>
-            <button
-              class="shrink-0 rounded-md bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
-              disabled={busyId !== null}
-              onclick={() => onRestore(session)}>
-              {busyId === session.id ? 'Restoring…' : 'Restore'}
-            </button>
-          </div>
-        </div>
-      {/if}
-    {/each}
-  </div>
-  {#if hasMore}
-    <div class="p-2 text-center">
+<div class="flex min-h-0 flex-1 flex-col">
+  <div class="relative mb-1">
+    <input
+      class="w-full rounded-md border border-line bg-overlay px-2.5 py-1 pr-7 text-xs text-ink placeholder:text-faint"
+      placeholder="Filter loaded sessions…"
+      bind:value={query}
+    />
+    {#if query !== ''}
       <button
-        class="w-full rounded-md bg-neutral-800 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700 disabled:opacity-50"
-        disabled={loading}
-        onclick={onLoadMore}>Load more</button
+        class="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs text-faint hover:text-ink"
+        aria-label="Clear session filter"
+        onclick={() => (query = '')}>✕</button
       >
+    {/if}
+  </div>
+  <div bind:this={scrollEl} class="min-h-0 flex-1 overflow-y-auto rounded-lg border border-line bg-raised/60">
+    <div class="relative w-full" style="height:{total}px">
+      {#each rows as row (row.key)}
+        {@const session = visible[row.index]}
+        {#if session}
+          <div class="absolute left-0 w-full px-1.5 pb-1.5" style="transform:translateY({row.start}px)">
+            <div
+              class="relative flex h-[60px] items-center justify-between gap-2 rounded-lg border border-line bg-overlay px-3 hover:border-faint/60">
+              <button class="min-w-0 flex-1 text-left" onclick={() => onSelect(session)}>
+                <p class="truncate text-sm font-medium text-ink">{session.name}</p>
+                <p class="mt-0.5 flex items-center gap-1.5 text-[11px] text-dim">
+                  <span class="rounded px-1 py-0.5 text-[10px] font-medium uppercase {BADGE[session.type]}">{typeBadge(session.type)}</span>
+                  <span class="truncate">{formatWhenLong(session.timestamp)} · {session.windows.length} window(s) · {session.windows.reduce((n, w) => n + w.tabs.length, 0)} tabs</span>
+                </p>
+              </button>
+              <button
+                class="shrink-0 rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent-strong disabled:opacity-50"
+                disabled={busyId !== null}
+                onclick={() => onRestore(session)}>
+                {busyId === session.id ? 'Restoring…' : 'Restore'}
+              </button>
+              <button
+                class="grid h-6 w-6 shrink-0 place-items-center rounded text-dim hover:bg-line hover:text-ink"
+                aria-label="Session actions"
+                aria-expanded={menuFor === session.id}
+                onclick={(e) => {
+                  e.stopPropagation();
+                  menuFor = menuFor === session.id ? null : session.id;
+                }}>⋯</button
+              >
+              {#if menuFor === session.id}
+                <div
+                  class="absolute right-2 top-[52px] z-10 w-40 rounded-lg border border-line bg-raised py-1 shadow-xl shadow-black/40">
+                  <button
+                    class="block w-full px-3 py-1.5 text-left text-xs text-dim hover:bg-overlay hover:text-ink"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      menuFor = null;
+                      onSelect(session);
+                    }}>Details & rename</button
+                  >
+                  <button
+                    class="block w-full px-3 py-1.5 text-left text-xs text-dim hover:bg-overlay hover:text-ink"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      menuFor = null;
+                      exportSession(session);
+                    }}>Export JSON</button
+                  >
+                  <button
+                    class="block w-full px-3 py-1.5 text-left text-xs text-bad hover:bg-overlay"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      menuFor = null;
+                      onDelete(session);
+                    }}>Delete</button
+                  >
+                </div>
+              {/if}
+            </div>
+          </div>
+        {/if}
+      {/each}
     </div>
-  {:else if sessions.length === 0}
-    <p class="p-4 text-center text-xs text-neutral-500">No sessions yet. Use “Snapshot now” or close a window to capture one.</p>
-  {/if}
+    {#if hasMore && query.trim() === ''}
+      <div class="p-2 text-center">
+        <button
+          class="w-full rounded-md border border-line py-1.5 text-xs text-dim hover:border-faint hover:text-ink disabled:opacity-50"
+          disabled={loading}
+          onclick={onLoadMore}>Load more</button
+        >
+      </div>
+    {:else if visible.length === 0}
+      <p class="p-4 text-center text-xs text-faint">
+        {sessions.length === 0
+          ? 'No sessions yet. Use “Snapshot now” or close a window to capture one.'
+          : 'No loaded sessions match that filter.'}
+      </p>
+    {/if}
+  </div>
 </div>

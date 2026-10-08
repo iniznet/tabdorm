@@ -2,7 +2,7 @@
   import LiveTabs from '@/lib/ui/LiveTabs.svelte';
   import SessionDetail from '@/lib/ui/SessionDetail.svelte';
   import SessionList from '@/lib/ui/SessionList.svelte';
-  import { pageSessions } from '@/core/db';
+  import { pageSessions, deleteSession as deleteSessionById, renameSession } from '@/core/db';
   import { sendToBackground } from '@/core/messaging';
   import { parseMarvellousSuspenderUrl } from '@/core/sanitize';
   import type { UnifiedSession } from '@/types';
@@ -16,6 +16,8 @@
   let notice: string = $state('');
   let tmsCount: number = $state(0);
   let migrating: boolean = $state(false);
+  let tabCount: number = $state(0);
+  let asleepCount: number = $state(0);
 
   /** Marvellous Suspender detection across ALL windows (not just the focused one). */
   async function scanTms(): Promise<void> {
@@ -86,6 +88,7 @@
   async function suspendInactive(): Promise<void> {
     const res = await sendToBackground({ type: 'runSweep' });
     notice = res.ok ? `Suspended ${String((res.payload as { discarded?: number })?.discarded ?? 0)} tab(s).` : `Sweep failed: ${res.error}`;
+    await refresh();
   }
 
   async function restore(session: UnifiedSession): Promise<void> {
@@ -103,38 +106,69 @@
     }
   }
 
-  function formatWhen(ts: number): string {
-    return new Date(ts).toLocaleString();
+  async function removeSession(session: UnifiedSession): Promise<void> {
+    if (!window.confirm(`Delete “${session.name}”? This cannot be undone.`)) return;
+    await deleteSessionById(session.id);
+    notice = 'Session deleted.';
+    await refresh();
+  }
+
+  async function rename(session: UnifiedSession, name: string): Promise<void> {
+    try {
+      await renameSession(session.id, name);
+      sessions = sessions.map((s) => (s.id === session.id ? { ...s, name } : s));
+      if (selected?.id === session.id) selected = { ...selected, name };
+      notice = 'Session renamed.';
+    } catch (error) {
+      notice = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  function openSettings(): void {
+    void chrome.runtime.openOptionsPage();
   }
 </script>
 
-<div class="flex h-full flex-col gap-2 p-3 text-sm">
-  <header class="flex items-center justify-between">
-    <h1 class="text-base font-semibold tracking-tight text-neutral-100">TabDorm</h1>
-    <div class="flex gap-2">
-      <button
-        class="rounded-md bg-neutral-800 px-2 py-1 text-xs font-medium hover:bg-neutral-700"
-        onclick={() => void snapshotNow()}>Snapshot now</button
-      >
-      <button
-        class="rounded-md bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-500"
-        onclick={() => void suspendInactive()}>Suspend inactive</button
-      >
-    </div>
+<div class="flex h-full flex-col gap-2 p-2.5 text-sm">
+  <header class="flex items-center gap-2">
+    <h1 class="text-base font-semibold tracking-tight text-ink">TabDorm</h1>
+    <span
+      class="rounded-full border px-2 py-0.5 text-[10px] {asleepCount > 0
+        ? 'border-good/40 text-good'
+        : 'border-line text-faint'}"
+      title="Tabs natively discarded in this window">{asleepCount}/{tabCount} asleep</span
+    >
+    <button
+      class="ml-auto grid h-7 w-7 place-items-center rounded-md border border-line text-dim hover:border-faint hover:text-ink"
+      aria-label="Open settings"
+      title="Settings"
+      onclick={openSettings}>⚙</button
+    >
   </header>
 
+  <div class="grid grid-cols-2 gap-2">
+    <button
+      class="rounded-md bg-accent px-2 py-1.5 text-xs font-medium text-white hover:bg-accent-strong disabled:opacity-50"
+      onclick={() => void snapshotNow()}>Snapshot now</button
+    >
+    <button
+      class="rounded-md border border-line px-2 py-1.5 text-xs font-medium text-dim hover:border-faint hover:text-ink"
+      onclick={() => void suspendInactive()}>Suspend inactive</button
+    >
+  </div>
+
   {#if notice !== ''}
-    <p class="rounded-md bg-neutral-800 px-2 py-1 text-xs text-neutral-300" role="status">{notice}</p>
+    <p class="rounded-md bg-overlay px-2 py-1 text-xs text-dim" role="status">{notice}</p>
   {/if}
 
   {#if tmsCount > 0}
-    <div class="flex items-center gap-2 rounded-md border border-amber-700/60 bg-amber-950/40 px-2 py-1.5">
-      <p class="min-w-0 flex-1 text-xs text-amber-200">
+    <div class="flex items-center gap-2 rounded-md border border-warn/40 bg-warn/10 px-2 py-1.5">
+      <p class="min-w-0 flex-1 text-xs leading-snug text-warn">
         <span class="font-semibold">{tmsCount}</span> Marvellous Suspender tab{tmsCount === 1 ? '' : 's'} detected.
         Migrating restores each one to its real URL natively.
       </p>
       <button
-        class="shrink-0 rounded-md bg-amber-600 px-2 py-1 text-xs font-semibold text-white hover:bg-amber-500 disabled:opacity-50"
+        class="shrink-0 rounded-md bg-warn px-2 py-1 text-xs font-semibold text-black hover:brightness-110 disabled:opacity-50"
         disabled={migrating}
         onclick={() => void migrateTms()}>
         {migrating ? 'Migrating…' : `Migrate ${tmsCount}`}
@@ -143,19 +177,18 @@
   {/if}
 
   <section class="flex min-h-0 flex-[2] flex-col">
-    <h2 class="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">Current window</h2>
-    <LiveTabs />
+    <h2 class="mb-1 pl-0.5 text-[10px] font-semibold uppercase tracking-wider text-faint">Current window</h2>
+    <LiveTabs onStats={(total, asleep) => { tabCount = total; asleepCount = asleep; }} />
   </section>
 
   <section class="flex min-h-0 flex-[3] flex-col">
-    <h2 class="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">
+    <h2 class="mb-1 pl-0.5 text-[10px] font-semibold uppercase tracking-wider text-faint">
       Sessions {#if loading}<span class="animate-pulse">· loading…</span>{/if}
     </h2>
     {#if selected !== null}
-      <SessionDetail session={selected} {busyId} onRestore={(s) => void restore(s)} onBack={() => (selected = null)} />
+      <SessionDetail session={selected} {busyId} onRestore={(s) => void restore(s)} onBack={() => (selected = null)} onRename={(s, name) => void rename(s, name)} onDelete={(s) => void removeSession(s)} />
     {:else}
-      <SessionList {sessions} onRestore={(s) => void restore(s)} {busyId} onSelect={(s) => (selected = s)} {hasMore}
-        {loading} onLoadMore={() => void loadMore()} />
+      <SessionList {sessions} onRestore={(s) => void restore(s)} {busyId} onSelect={(s) => (selected = s)} onDelete={(s) => void removeSession(s)} {hasMore} {loading} onLoadMore={() => void loadMore()} />
     {/if}
   </section>
 </div>
