@@ -12,6 +12,7 @@
     "prepare": "wxt prepare"
   },
   "dependencies": {
+    "@tanstack/svelte-virtual": "^3.13.39",
     "dexie": "^4.4.6"
   },
   "devDependencies": {
@@ -19,8 +20,9 @@
     "@types/chrome": "^0.3.4",
     "@wxt-dev/module-svelte": "^2.0.5",
     "svelte": "^5.57.2",
+    "svelte-check": "^4.7.6",
     "tailwindcss": "^4.3.3",
-    "typescript": "^7.0.2",
+    "typescript": "^6.0.3",
     "wxt": "^0.21.4"
   }
 }

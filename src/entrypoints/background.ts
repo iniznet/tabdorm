@@ -1,10 +1,17 @@
-import { getConfig, registerConfigInvalidation } from '@/core/config-store';
-import { initDatabase } from '@/core/db';
-import { flushPendingDiscard } from '@/core/discard';
+import { registerSweepAlarmListener, runSweepOnce, syncSweepAlarm } from '@/core/suspension';
+import { forgetActivity, touchActivity } from '@/core/activity';
+import { restoreSession } from '@/core/restoration';
+import { discardTabSafe, flushPendingDiscard } from '@/core/discard';
 import { initIdleGuard } from '@/core/idle-guard';
 import { routeCommittedNavigation } from '@/core/auto-route';
-import { ShadowTree } from '@/core/shadow-tree';
+import { putSession, initDatabase } from '@/core/db';
+import { getConfig, registerConfigInvalidation } from '@/core/config-store';
 import { ensureConfigPersisted } from '@/core/config-store';
+import { contentHashOf } from '@/core/hash';
+import { registerBackgroundMessageHandler } from '@/core/messaging';
+import { ShadowTree } from '@/core/shadow-tree';
+import type { BackgroundRequest } from '@/types/messages';
+import type { UnifiedSession } from '@/types';
 
 /**
  * TabDorm background service worker.
@@ -19,6 +26,9 @@ export default defineBackground(() => {
   shadowTree.install();
   initIdleGuard();
   registerConfigInvalidation();
+  registerSweepAlarmListener();
+  registerActivityTracking();
+  registerBackgroundMessageHandler((request) => handleMessage(request, shadowTree));
   chrome.webNavigation.onCommitted.addListener((details) => {
     void onTopFrameCommitted(details);
   });
@@ -30,8 +40,9 @@ export default defineBackground(() => {
 
 async function bootstrap(shadowTree: ShadowTree): Promise<void> {
   try {
-    await getConfig();
+    const config = await getConfig();
     await ensureConfigPersisted();
+    await syncSweepAlarm(config);
   } catch (error) {
     console.warn('[tabdorm] config bootstrap failed; defaults active.', error);
   }
@@ -46,4 +57,43 @@ async function onTopFrameCommitted(
   if (details.frameId !== 0) return;
   await flushPendingDiscard(details.tabId);
   await routeCommittedNavigation(details);
+}
+
+/** Activity timestamps feed the suspension sweep's idle math. */
+function registerActivityTracking(): void {
+  chrome.tabs.onActivated.addListener((info) => {
+    void touchActivity(info.tabId);
+  });
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.status === 'complete' || changeInfo.audible !== undefined) {
+      void touchActivity(tabId);
+    }
+  });
+  chrome.tabs.onRemoved.addListener((tabId) => {
+    void forgetActivity(tabId);
+  });
+}
+
+async function handleMessage(request: BackgroundRequest, shadowTree: ShadowTree): Promise<unknown> {
+  switch (request.type) {
+    case 'snapshotNow': {
+      const windows = shadowTree.snapshotAll();
+      const session: UnifiedSession = {
+        id: crypto.randomUUID(),
+        name: `Snapshot — ${new Date().toLocaleString()}`,
+        timestamp: Date.now(),
+        type: 'user_saved',
+        contentHash: contentHashOf(windows),
+        windows,
+      };
+      await putSession(session);
+      return { sessionId: session.id, windows: windows.length };
+    }
+    case 'runSweep':
+      return runSweepOnce();
+    case 'suspendTab':
+      return discardTabSafe(request.tabId);
+    case 'restoreSession':
+      return restoreSession(request.sessionId, request.screen);
+  }
 }
