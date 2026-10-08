@@ -1,3 +1,6 @@
+/** Chromium contract: groupId sentinel for "not in a group". */
+export const TAB_GROUP_ID_NONE = -1;
+
 /** Native Chromium tab-group colors (@types/chrome global namespace). */
 export type GroupColor = `${chrome.tabGroups.Color}`;
 

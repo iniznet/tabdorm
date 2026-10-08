@@ -3,7 +3,8 @@ export type BackgroundRequest =
   | { type: 'snapshotNow' }
   | { type: 'runSweep' }
   | { type: 'suspendTab'; tabId: number }
-  | { type: 'restoreSession'; sessionId: string; screen: { availWidth: number; availHeight: number } };
+  | { type: 'restoreSession'; sessionId: string; screen: { availWidth: number; availHeight: number } }
+  | { type: 'migrateTms' };
 
 export type BackgroundResponse =
   | { ok: true; payload?: unknown }
@@ -11,7 +12,7 @@ export type BackgroundResponse =
 
 export type RequestType = BackgroundRequest['type'];
 
-const REQUEST_TYPES: readonly RequestType[] = ['snapshotNow', 'runSweep', 'suspendTab', 'restoreSession'];
+const REQUEST_TYPES: readonly RequestType[] = ['snapshotNow', 'runSweep', 'suspendTab', 'restoreSession', 'migrateTms'];
 
 /**
  * Runtime validation for messages crossing the extension boundary — zero blind
@@ -23,13 +24,14 @@ export function parseBackgroundRequest(raw: unknown): { ok: true; request: Backg
   const type = candidate['type'];
   if (
     typeof type !== 'string' ||
-    (type !== 'snapshotNow' && type !== 'runSweep' && type !== 'suspendTab' && type !== 'restoreSession')
+    (type !== 'snapshotNow' && type !== 'runSweep' && type !== 'suspendTab' && type !== 'restoreSession' && type !== 'migrateTms')
   ) {
     return { ok: false, error: `Unknown request type: ${String(type)}` };
   }
   switch (type) {
     case 'snapshotNow':
     case 'runSweep':
+    case 'migrateTms':
       return { ok: true, request: { type } };
     case 'suspendTab': {
       const tabId = candidate['tabId'];

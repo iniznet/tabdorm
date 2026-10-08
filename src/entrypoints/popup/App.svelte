@@ -20,6 +20,15 @@
     busy = false;
   }
 
+  async function migrateTms(): Promise<void> {
+    busy = true;
+    const res = await sendToBackground({ type: 'migrateTms' });
+    status = res.ok
+      ? `Migrated ${String((res.payload as { migrated?: number })?.migrated ?? 0)} suspended tab(s).`
+      : `Failed: ${res.error}`;
+    busy = false;
+  }
+
   async function openSidePanel(): Promise<void> {
     const win = await chrome.windows.getCurrent();
     if (win.id === undefined) return;
@@ -43,6 +52,10 @@
     class="rounded-md bg-neutral-800 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:bg-neutral-700 disabled:opacity-50"
     disabled={busy}
     onclick={() => void suspendInactive()}>Suspend inactive tabs</button
+  >
+  <button
+    class="rounded-md border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:bg-neutral-800"
+    onclick={() => void migrateTms()}>Migrate suspended tabs</button
   >
   <button
     class="rounded-md border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:bg-neutral-800"

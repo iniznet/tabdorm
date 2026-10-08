@@ -80,6 +80,42 @@ export async function putSession(session: UnifiedSession): Promise<number> {
   return db.sessions.add(session);
 }
 
+/** Newest record of a given session type, via the [type+timestamp] compound index. */
+export async function getLatestSessionOfType(type: UnifiedSession['type']): Promise<UnifiedSession | undefined> {
+  return db.sessions
+    .where('[type+timestamp]')
+    .between([type, DexieMinKey], [type, DexieMaxKey])
+    .reverse()
+    .first();
+}
+
+/** Deletes the OLDEST auto_snapshots beyond the retention cap. Returns count removed. */
+export async function pruneAutoSnapshots(maxRetained: number): Promise<number> {
+  const type: UnifiedSession['type'] = 'auto_snapshot';
+  const total = await db.sessions
+    .where('[type+timestamp]')
+    .between([type, DexieMinKey], [type, DexieMaxKey])
+    .count();
+  const excess = total - maxRetained;
+  if (excess <= 0) return 0;
+  const oldest = await db.sessions
+    .where('[type+timestamp]')
+    .between([type, DexieMinKey], [type, DexieMaxKey])
+    .limit(excess)
+    .toArray();
+  await db.sessions.bulkDelete(oldest.map((s) => s.rev));
+  return excess;
+}
+
+/** Deletes auto_snapshots older than the cutoff (user data is never touched). */
+export async function deleteAutoSnapshotsOlderThan(cutoffTimestamp: number): Promise<number> {
+  const type: UnifiedSession['type'] = 'auto_snapshot';
+  return db.sessions
+    .where('[type+timestamp]')
+    .between([type, DexieMinKey], [type, cutoffTimestamp])
+    .delete();
+}
+
 export async function countSessions(): Promise<number> {
   return db.sessions.count();
 }

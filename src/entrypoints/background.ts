@@ -4,6 +4,8 @@ import { restoreSession } from '@/core/restoration';
 import { discardTabSafe, flushPendingDiscard } from '@/core/discard';
 import { initIdleGuard } from '@/core/idle-guard';
 import { routeCommittedNavigation } from '@/core/auto-route';
+import { maybeAutoBackup, registerSnapshotAlarmListener, runAutoSnapshot, syncSnapshotAlarm } from '@/core/snapshots';
+import { migrateAll } from '@/core/tms-migrate';
 import { putSession, initDatabase } from '@/core/db';
 import { getConfig, registerConfigInvalidation } from '@/core/config-store';
 import { ensureConfigPersisted } from '@/core/config-store';
@@ -27,6 +29,7 @@ export default defineBackground(() => {
   initIdleGuard();
   registerConfigInvalidation();
   registerSweepAlarmListener();
+  registerSnapshotAlarmListener(shadowTree);
   registerActivityTracking();
   registerBackgroundMessageHandler((request) => handleMessage(request, shadowTree));
   chrome.webNavigation.onCommitted.addListener((details) => {
@@ -35,14 +38,25 @@ export default defineBackground(() => {
   chrome.runtime.onInstalled.addListener(() => {
     void ensureConfigPersisted();
   });
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'sync' || changes['tabdormConfig'] === undefined) return;
+    void resyncAlarms();
+  });
   void bootstrap(shadowTree);
 });
+
+async function resyncAlarms(): Promise<void> {
+  const config = await getConfig();
+  await syncSweepAlarm(config);
+  await syncSnapshotAlarm(config);
+}
 
 async function bootstrap(shadowTree: ShadowTree): Promise<void> {
   try {
     const config = await getConfig();
     await ensureConfigPersisted();
     await syncSweepAlarm(config);
+    await syncSnapshotAlarm(config);
   } catch (error) {
     console.warn('[tabdorm] config bootstrap failed; defaults active.', error);
   }
@@ -95,5 +109,7 @@ async function handleMessage(request: BackgroundRequest, shadowTree: ShadowTree)
       return discardTabSafe(request.tabId);
     case 'restoreSession':
       return restoreSession(request.sessionId, request.screen);
+    case 'migrateTms':
+      return migrateAll();
   }
 }
