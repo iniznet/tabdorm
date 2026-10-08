@@ -4,6 +4,7 @@
   import SessionList from '@/lib/ui/SessionList.svelte';
   import { pageSessions } from '@/core/db';
   import { sendToBackground } from '@/core/messaging';
+  import { parseMarvellousSuspenderUrl } from '@/core/sanitize';
   import type { UnifiedSession } from '@/types';
 
   let sessions: UnifiedSession[] = $state([]);
@@ -13,6 +14,40 @@
   let selected: UnifiedSession | null = $state(null);
   let busyId: string | null = $state(null);
   let notice: string = $state('');
+  let tmsCount: number = $state(0);
+  let migrating: boolean = $state(false);
+
+  /** Marvellous Suspender detection across ALL windows (not just the focused one). */
+  async function scanTms(): Promise<void> {
+    const tabs = await chrome.tabs.query({});
+    tmsCount = tabs.filter((t) => t.url !== undefined && parseMarvellousSuspenderUrl(t.url) !== null).length;
+  }
+
+  $effect(() => {
+    void scanTms();
+    const onChange = () => void scanTms();
+    chrome.tabs.onUpdated.addListener(onChange);
+    chrome.tabs.onRemoved.addListener(onChange);
+    chrome.tabs.onCreated.addListener(onChange);
+    return () => {
+      chrome.tabs.onUpdated.removeListener(onChange);
+      chrome.tabs.onRemoved.removeListener(onChange);
+      chrome.tabs.onCreated.removeListener(onChange);
+    };
+  });
+
+  async function migrateTms(): Promise<void> {
+    migrating = true;
+    try {
+      const res = await sendToBackground({ type: 'migrateTms' });
+      notice = res.ok
+        ? `Migrated ${String((res.payload as { migrated?: number })?.migrated ?? 0)} Marvellous Suspender tab(s).`
+        : `Migration failed: ${res.error}`;
+      await scanTms();
+    } finally {
+      migrating = false;
+    }
+  }
 
   async function loadMore(): Promise<void> {
     if (loading || !hasMore) return;
@@ -90,6 +125,21 @@
 
   {#if notice !== ''}
     <p class="rounded-md bg-neutral-800 px-2 py-1 text-xs text-neutral-300" role="status">{notice}</p>
+  {/if}
+
+  {#if tmsCount > 0}
+    <div class="flex items-center gap-2 rounded-md border border-amber-700/60 bg-amber-950/40 px-2 py-1.5">
+      <p class="min-w-0 flex-1 text-xs text-amber-200">
+        <span class="font-semibold">{tmsCount}</span> Marvellous Suspender tab{tmsCount === 1 ? '' : 's'} detected.
+        Migrating restores each one to its real URL natively.
+      </p>
+      <button
+        class="shrink-0 rounded-md bg-amber-600 px-2 py-1 text-xs font-semibold text-white hover:bg-amber-500 disabled:opacity-50"
+        disabled={migrating}
+        onclick={() => void migrateTms()}>
+        {migrating ? 'Migrating…' : `Migrate ${tmsCount}`}
+      </button>
+    </div>
   {/if}
 
   <section class="flex min-h-0 flex-[2] flex-col">
