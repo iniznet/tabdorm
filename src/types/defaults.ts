@@ -31,6 +31,8 @@ export const DEFAULT_TAB_DORM_CONFIG: TabDormConfig = {
       enabled: true,
       reRouteAlreadyGrouped: false,
       autoGroupByDomain: true,
+      minTabsPerGroup: 2,
+      bucketLonelyTabs: false,
       rules: [],
     },
   },
@@ -51,6 +53,7 @@ export const DEFAULT_TAB_DORM_CONFIG: TabDormConfig = {
 };
 
 const NUMERIC_BOUNDS = {
+  minTabsPerGroup: { min: 1, max: 50 },
   idleThresholdMinutes: { min: 1, max: 10_080 },
   sweepIntervalMinutes: { min: 1, max: 1_440 },
   wakeCooldownMs: { min: 0, max: 3_600_000 },
@@ -153,6 +156,8 @@ export function resolveConfig(raw: unknown): TabDormConfig {
         enabled: readBool(r['enabled'], DEFAULT_TAB_DORM_CONFIG.groups.routing.enabled),
         reRouteAlreadyGrouped: readBool(r['reRouteAlreadyGrouped'], DEFAULT_TAB_DORM_CONFIG.groups.routing.reRouteAlreadyGrouped),
         autoGroupByDomain: readBool(r['autoGroupByDomain'], DEFAULT_TAB_DORM_CONFIG.groups.routing.autoGroupByDomain),
+        minTabsPerGroup: clampNumber(r['minTabsPerGroup'], DEFAULT_TAB_DORM_CONFIG.groups.routing.minTabsPerGroup, 1, 50),
+        bucketLonelyTabs: readBool(r['bucketLonelyTabs'], DEFAULT_TAB_DORM_CONFIG.groups.routing.bucketLonelyTabs),
         rules: readRules(r['rules']),
       },
     },

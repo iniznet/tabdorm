@@ -110,6 +110,21 @@
       hint="Tabs group by site automatically (title + color from the domain); rules below override it."
       onChange={(v) => onChange((d) => (d.groups.routing.autoGroupByDomain = v))}
     />
+    <NumberField
+      value={config.groups.routing.minTabsPerGroup}
+      label="Minimum tabs per group"
+      hint="A site only becomes a group with this many tabs in one window. Rules ignore this."
+      min={1}
+      max={50}
+      suffix="tabs"
+      onChange={(v) => onChange((d) => (d.groups.routing.minTabsPerGroup = v))}
+    />
+    <Toggle
+      checked={config.groups.routing.bucketLonelyTabs}
+      label="Collect lonely tabs into an Ungrouped group"
+      hint="Below the minimum, tabs gather in one grey group instead of staying loose. They leave it automatically once their site qualifies."
+      onChange={(v) => onChange((d) => (d.groups.routing.bucketLonelyTabs = v))}
+    />
 
     <div class="py-2.5">
       <div class="flex items-center justify-between">

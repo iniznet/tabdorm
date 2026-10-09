@@ -43,6 +43,10 @@ export interface TabDormConfig {
       reRouteAlreadyGrouped: boolean;
       /** Zero-config fallback: group tabs by site when no rule matches. */
       autoGroupByDomain: boolean;
+      /** A site only earns a group when at least this many tabs share a window (rules bypass this). */
+      minTabsPerGroup: number;
+      /** Collect below-threshold sites into one grey bucket group. */
+      bucketLonelyTabs: boolean;
       rules: AutoRouteRule[];
     };
   };
