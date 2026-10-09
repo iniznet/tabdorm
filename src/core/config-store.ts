@@ -19,7 +19,13 @@ export async function getConfig(): Promise<TabDormConfig> {
 
 /** Persists the full resolved config (first run seeds defaults). */
 export async function saveConfig(config: TabDormConfig): Promise<void> {
-  await chrome.storage.sync.set({ [CONFIG_KEY]: config });
+  try {
+    await chrome.storage.sync.set({ [CONFIG_KEY]: config });
+  } catch (error) {
+    throw new Error(
+      `Saving settings failed (chrome.storage.sync quota or sync error): ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
   cache = config;
 }
 

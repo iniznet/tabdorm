@@ -1,6 +1,8 @@
 <script lang="ts">
   import { createVirtualizer } from '@tanstack/svelte-virtual';
   import { get } from 'svelte/store';
+  import { putSession } from '@/core/db';
+  import { parseImportedSession } from '@/core/session-import';
   import type { UnifiedSession } from '@/types';
 
   interface Props {
@@ -12,9 +14,10 @@
     onRestore: (session: UnifiedSession) => void;
     onDelete: (session: UnifiedSession) => void;
     onLoadMore: () => void;
+    onImported: () => void;
   }
 
-  let { sessions, busyId, hasMore, loading, onSelect, onRestore, onDelete, onLoadMore }: Props = $props();
+  let { sessions, busyId, hasMore, loading, onSelect, onRestore, onDelete, onLoadMore, onImported }: Props = $props();
 
   let scrollEl: HTMLDivElement | undefined = $state();
   let query = $state('');
@@ -54,6 +57,19 @@
     return 'saved';
   }
 
+  let importInput: HTMLInputElement | undefined = $state();
+  let importError = $state<string | null>(null);
+
+  async function importSession(file: File): Promise<void> {
+    importError = null;
+    try {
+      await putSession(parseImportedSession(await file.text()));
+      onImported();
+    } catch (error) {
+      importError = error instanceof Error ? error.message : String(error);
+    }
+  }
+
   function exportSession(session: UnifiedSession): void {
     const url = URL.createObjectURL(new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' }));
     const anchor = document.createElement('a');
@@ -83,6 +99,23 @@
         aria-label="Clear session filter"
         onclick={() => (query = '')}>✕</button
       >
+    {/if}
+  </div>
+  <div class="mb-1 flex items-center gap-2">
+    <button class="text-[11px] text-dim hover:text-ink" onclick={() => importInput?.click()}>⤓ Import session file…</button>
+    <input
+      bind:this={importInput}
+      type="file"
+      accept="application/json,.json"
+      class="hidden"
+      onchange={(e) => {
+        const file = e.currentTarget.files?.[0];
+        if (file !== undefined) void importSession(file);
+        e.currentTarget.value = '';
+      }}
+    />
+    {#if importError !== null}
+      <span class="text-[11px] text-bad">{importError}</span>
     {/if}
   </div>
   <div bind:this={scrollEl} class="min-h-0 flex-1 overflow-y-auto rounded-lg border border-line bg-raised/60">

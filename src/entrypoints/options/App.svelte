@@ -10,6 +10,7 @@
 
   let config: TabDormConfig | null = $state(null);
   let savedFlash = $state(false);
+  let saveError = $state<string | null>(null);
   let flashTimer: ReturnType<typeof setTimeout> | undefined;
 
   $effect(() => {
@@ -27,11 +28,17 @@
     mutate(draft);
     const resolved = resolveConfig(draft);
     config = resolved;
-    void saveConfig(resolved).then(() => {
-      savedFlash = true;
-      clearTimeout(flashTimer);
-      flashTimer = setTimeout(() => (savedFlash = false), 1500);
-    });
+    saveError = null;
+    void saveConfig(resolved).then(
+      () => {
+        savedFlash = true;
+        clearTimeout(flashTimer);
+        flashTimer = setTimeout(() => (savedFlash = false), 1500);
+      },
+      (error: unknown) => {
+        saveError = error instanceof Error ? error.message : String(error);
+      },
+    );
   }
 
   function onImported(imported: TabDormConfig): void {
@@ -60,6 +67,10 @@
           : 'opacity-0'}">Saved ✓</span
       >
     </header>
+
+    {#if saveError !== null}
+      <p class="mb-4 rounded-md border border-bad/40 bg-bad/10 px-3 py-2 text-xs text-bad" role="alert">{saveError}</p>
+    {/if}
 
     <nav class="mb-6 flex flex-wrap gap-2" aria-label="Settings sections">
       {#each NAV as [id, label] (id)}

@@ -49,6 +49,21 @@ export async function resetAllActivity(): Promise<void> {
   await writeActivity(map);
 }
 
+const SEED_FLAG_KEY = 'tabdorm:browserSessionSeeded';
+
+/**
+ * One-time-per-browser-run activity seeding. storage.session is wiped when the
+ * browser restarts, so unknown tabs read lastActivity=0 and instantly qualify
+ * as idle on the first sweep after relaunch. The flag survives service-worker
+ * restarts within a browser run, so re-seeding never resets live idle clocks.
+ */
+export async function ensureColdStartSeeded(): Promise<void> {
+  const stored = await chrome.storage.session.get(SEED_FLAG_KEY);
+  if (stored[SEED_FLAG_KEY] === true) return;
+  await chrome.storage.session.set({ [SEED_FLAG_KEY]: true });
+  await resetAllActivity();
+}
+
 export async function startWakeCooldown(durationMs: number): Promise<void> {
   await chrome.storage.session.set({ [COOLDOWN_KEY]: Date.now() + durationMs });
 }

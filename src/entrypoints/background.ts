@@ -1,12 +1,14 @@
 import { registerSweepAlarmListener, runSweepOnce, syncSweepAlarm } from '@/core/suspension';
-import { forgetActivity, touchActivity } from '@/core/activity';
+import { ensureColdStartSeeded, forgetActivity, touchActivity } from '@/core/activity';
+import { updateAsleepBadge } from '@/core/badge';
+import { initContextMenus, suspendOtherTabs } from '@/core/context-menus';
 import { restoreSession } from '@/core/restoration';
 import { discardTabSafe, flushPendingDiscard } from '@/core/discard';
 import { initIdleGuard } from '@/core/idle-guard';
 import { routeCommittedNavigation } from '@/core/auto-route';
-import { maybeAutoBackup, registerSnapshotAlarmListener, runAutoSnapshot, syncSnapshotAlarm } from '@/core/snapshots';
+import { maybeAutoBackup, registerSnapshotAlarmListener, runAutoSnapshot, saveUserSnapshot, syncSnapshotAlarm } from '@/core/snapshots';
 import { migrateAll } from '@/core/tms-migrate';
-import { putSession, initDatabase } from '@/core/db';
+import { initDatabase } from '@/core/db';
 import { getConfig, registerConfigInvalidation } from '@/core/config-store';
 import { ensureConfigPersisted } from '@/core/config-store';
 import { contentHashOf } from '@/core/hash';
@@ -32,11 +34,16 @@ export default defineBackground(() => {
   registerSnapshotAlarmListener(shadowTree);
   registerActivityTracking();
   registerBackgroundMessageHandler((request) => handleMessage(request, shadowTree));
+  chrome.commands.onCommand.addListener((command) => {
+    void onCommand(command, shadowTree);
+  });
+  initContextMenus();
   chrome.webNavigation.onCommitted.addListener((details) => {
     void onTopFrameCommitted(details);
   });
-  chrome.runtime.onInstalled.addListener(() => {
+  chrome.runtime.onInstalled.addListener((details) => {
     void ensureConfigPersisted();
+    if (details.reason === 'install') void chrome.runtime.openOptionsPage();
   });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'sync' || changes['tabdormConfig'] === undefined) return;
@@ -57,11 +64,13 @@ async function bootstrap(shadowTree: ShadowTree): Promise<void> {
     await ensureConfigPersisted();
     await syncSweepAlarm(config);
     await syncSnapshotAlarm(config);
+    await ensureColdStartSeeded();
   } catch (error) {
     console.warn('[tabdorm] config bootstrap failed; defaults active.', error);
   }
   void initDatabase();
   await shadowTree.init();
+  void updateAsleepBadge();
 }
 
 /** Shared top-frame commit dispatcher: discard race guard, then auto-routing. */
@@ -85,31 +94,39 @@ function registerActivityTracking(): void {
   });
   chrome.tabs.onRemoved.addListener((tabId) => {
     void forgetActivity(tabId);
+    void updateAsleepBadge();
   });
 }
 
 async function handleMessage(request: BackgroundRequest, shadowTree: ShadowTree): Promise<unknown> {
   switch (request.type) {
-    case 'snapshotNow': {
-      const windows = shadowTree.snapshotAll();
-      const session: UnifiedSession = {
-        id: crypto.randomUUID(),
-        name: `Snapshot — ${new Date().toLocaleString()}`,
-        timestamp: Date.now(),
-        type: 'user_saved',
-        contentHash: contentHashOf(windows),
-        windows,
-      };
-      await putSession(session);
-      return { sessionId: session.id, windows: windows.length };
+    case 'snapshotNow':
+      return saveUserSnapshot(shadowTree);
+    case 'runSweep': {
+      const summary = await runSweepOnce();
+      await updateAsleepBadge();
+      return summary;
     }
-    case 'runSweep':
-      return runSweepOnce();
-    case 'suspendTab':
-      return discardTabSafe(request.tabId);
+    case 'suspendTab': {
+      const outcome = await discardTabSafe(request.tabId);
+      await updateAsleepBadge();
+      return outcome;
+    }
     case 'restoreSession':
       return restoreSession(request.sessionId, request.screen);
     case 'migrateTms':
       return migrateAll();
+  }
+}
+
+async function onCommand(command: string, shadowTree: ShadowTree): Promise<void> {
+  if (command === 'tabdorm-suspend-others') {
+    const win = await chrome.windows.getLastFocused();
+    if (win.id !== undefined) await suspendOtherTabs(win.id);
+    await updateAsleepBadge();
+    return;
+  }
+  if (command === 'tabdorm-snapshot-now') {
+    await saveUserSnapshot(shadowTree);
   }
 }

@@ -8,6 +8,23 @@ export const SNAPSHOT_ALARM = 'tabdorm:snapshot';
 const LAST_BACKUP_KEY = 'tabdorm:lastAutoBackupAt';
 const DAY_MS = 86_400_000;
 
+/** Shared write path for user-triggered snapshots (popup message + keyboard command). */
+export async function saveUserSnapshot(
+  shadowTree: ShadowTree,
+): Promise<{ sessionId: string; windows: number }> {
+  const windows = shadowTree.snapshotAll();
+  const session: UnifiedSession = {
+    id: crypto.randomUUID(),
+    name: `Snapshot — ${new Date().toLocaleString()}`,
+    timestamp: Date.now(),
+    type: 'user_saved',
+    contentHash: contentHashOf(windows),
+    windows,
+  };
+  await putSession(session);
+  return { sessionId: session.id, windows: windows.length };
+}
+
 /** Creates or clears the periodic snapshot alarm to match the current config. */
 export async function syncSnapshotAlarm(config: TabDormConfig): Promise<void> {
   const existing = await chrome.alarms.get(SNAPSHOT_ALARM);

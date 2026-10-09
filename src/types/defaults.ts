@@ -20,10 +20,6 @@ export const DEFAULT_TAB_DORM_CONFIG: TabDormConfig = {
       protectedGroupColors: [],
       protectedGroupTitles: [],
     },
-    visualCue: {
-      enabled: false,
-      prefix: '💤 ',
-    },
   },
   groups: {
     suspendOnGroupCollapse: false,
@@ -115,7 +111,6 @@ export function resolveConfig(raw: unknown): TabDormConfig {
     typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
   const s = readObject(source['suspension']);
   const ex = readObject(s['exemptions']);
-  const vc = readObject(s['visualCue']);
   const g = readObject(source['groups']);
   const r = readObject(g['routing']);
   const rest = readObject(source['restoration']);
@@ -142,10 +137,6 @@ export function resolveConfig(raw: unknown): TabDormConfig {
           ? ex['protectedGroupColors'].filter(isGroupColor)
           : [],
         protectedGroupTitles: readStringArray(ex['protectedGroupTitles']),
-      },
-      visualCue: {
-        enabled: readBool(vc['enabled'], DEFAULT_TAB_DORM_CONFIG.suspension.visualCue.enabled),
-        prefix: readString(vc['prefix'], DEFAULT_TAB_DORM_CONFIG.suspension.visualCue.prefix),
       },
     },
     groups: {

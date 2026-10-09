@@ -1,6 +1,7 @@
 import type { GroupColor, TabDormConfig } from '@/types';
 import { getLastActivity, isWakeCooldownActive } from './activity';
 import { ruleToRegExp } from './auto-route';
+import { updateAsleepBadge } from './badge';
 import { getConfig } from './config-store';
 import { discardTabSafe } from './discard';
 import { safeTabUrl } from './sanitize';
@@ -152,6 +153,6 @@ export async function syncSweepAlarm(config: TabDormConfig): Promise<void> {
 /** MUST be registered synchronously at service-worker startup. */
 export function registerSweepAlarmListener(): void {
   chrome.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name === SWEEP_ALARM) void runSweepOnce();
+    if (alarm.name === SWEEP_ALARM) void runSweepOnce().then(() => updateAsleepBadge());
   });
 }

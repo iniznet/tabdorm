@@ -218,22 +218,5 @@
         </ul>
       {/if}
     </div>
-
-    <Toggle
-      checked={config.suspension.visualCue.enabled}
-      label="Sleeping-tab visual cue"
-      hint="Prefixes sleeping tabs' titles in the side panel with the marker below."
-      onChange={(v) => onChange((d) => (d.suspension.visualCue.enabled = v))}
-    />
-    {#if config.suspension.visualCue.enabled}
-      <div class="flex items-center justify-between gap-3 py-2.5">
-        <span class="text-sm text-ink">Cue prefix</span>
-        <input
-          class="w-24 rounded-md border border-line bg-overlay px-2 py-1 text-center text-sm text-ink"
-          value={config.suspension.visualCue.prefix}
-          onchange={(e) => onChange((d) => (d.suspension.visualCue.prefix = e.currentTarget.value))}
-        />
-      </div>
-    {/if}
   </div>
 </section>

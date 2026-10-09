@@ -188,7 +188,7 @@
     {#if selected !== null}
       <SessionDetail session={selected} {busyId} onRestore={(s) => void restore(s)} onBack={() => (selected = null)} onRename={(s, name) => void rename(s, name)} onDelete={(s) => void removeSession(s)} />
     {:else}
-      <SessionList {sessions} onRestore={(s) => void restore(s)} {busyId} onSelect={(s) => (selected = s)} onDelete={(s) => void removeSession(s)} {hasMore} {loading} onLoadMore={() => void loadMore()} />
+      <SessionList {sessions} onRestore={(s) => void restore(s)} {busyId} onSelect={(s) => (selected = s)} onDelete={(s) => void removeSession(s)} {hasMore} {loading} onLoadMore={() => void loadMore()} onImported={() => void refresh()} />
     {/if}
   </section>
 </div>

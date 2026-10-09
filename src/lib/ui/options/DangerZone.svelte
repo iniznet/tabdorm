@@ -12,6 +12,22 @@
 
   let note = $state('');
   let fileInput: HTMLInputElement | undefined = $state();
+  let storageNote = $state<string | null>(null);
+
+  $effect(() => {
+    void estimateStorage();
+  });
+
+  async function estimateStorage(): Promise<void> {
+    try {
+      if (navigator.storage?.estimate === undefined) return;
+      const { usage, quota } = await navigator.storage.estimate();
+      if (usage === undefined || quota === undefined) return;
+      storageNote = `Local storage: ${(usage / 1_048_576).toFixed(1)} MB of ${(quota / 1_048_576).toFixed(0)} MB used.`;
+    } catch {
+      storageNote = null;
+    }
+  }
 
   function download(filename: string, data: string): void {
     const url = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
@@ -97,6 +113,10 @@
     </span>
     <button class={BTN_DANGER} onclick={() => void clearHistory()}>Clear</button>
   </div>
+
+  {#if storageNote !== null}
+    <p class="py-2.5 text-xs text-faint">{storageNote}</p>
+  {/if}
 
   {#if note !== ''}
     <p class="py-2.5 text-xs text-dim" role="status">{note}</p>

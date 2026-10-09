@@ -29,10 +29,6 @@ export interface TabDormConfig {
       protectedGroupColors: GroupColor[];
       protectedGroupTitles: string[];
     };
-    visualCue: {
-      enabled: boolean;
-      prefix: string;
-    };
   };
   groups: {
     suspendOnGroupCollapse: boolean;

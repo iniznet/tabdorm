@@ -20,7 +20,17 @@ export default defineConfig({
       'webNavigation',
       'idle',
       'sidePanel',
+      'contextMenus',
     ],
+    commands: {
+      'tabdorm-suspend-others': {
+        suggested_key: { default: 'Ctrl+Shift+S' },
+        description: 'Suspend all inactive tabs in the current window',
+      },
+      'tabdorm-snapshot-now': {
+        description: 'Take a session snapshot now',
+      },
+    },
     minimum_chrome_version: '116',
   },
 });

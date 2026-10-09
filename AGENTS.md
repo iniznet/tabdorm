@@ -11,6 +11,8 @@
 - **Svelte 5:** no `context="module"` scripts (deprecated) — put helpers in the instance script. For @tanstack/svelte-virtual, pass `get count()` (getter, not a captured value) and sync changes via `get(virtualizer).setOptions({ count })` in a `$effect`.
 - **Tailwind:** never build class names by string interpolation — dynamic values need static lookup maps (Tailwind can't see dynamic classes).
 - **Zero hardcoding:** all timers/thresholds/rules come from `TabDormConfig` via `getConfig()`; add new knobs to `DEFAULT_TAB_DORM_CONFIG` + `resolveConfig` bounds together.
+- **Cold-start seeding:** activity timestamps live in `chrome.storage.session` (wiped on browser restart) — `ensureColdStartSeeded()` must run from background bootstrap; seeding on every SW wake would reset idle clocks and silently disable suspension.
+- **Badge/menus/commands:** the asleep-count badge rides on sweep completion + tab removal; context menus are recreated idempotently (`removeAll` → `create`) because SW restarts wipe menu registrations.
 - **Design tokens:** all surfaces use the `@theme` palette in `src/app.css` (`surface/raised/overlay/line/ink/dim/faint/accent/good/warn/bad`) — never a raw hex or `neutral-800`-style default in a component.
 - **Options page:** every config knob must be editable in `src/entrypoints/options/`; UI writes go through `resolveConfig()` (single write path, DangerZone's `update` pattern) — never raw `chrome.storage` sets.
 - **Verification:** `npx tsc --noEmit` + `npx svelte-check` + `npx wxt build` + `npx tsx tasks/step*-smoke-probes.ts` before every commit.
