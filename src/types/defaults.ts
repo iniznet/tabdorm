@@ -30,6 +30,7 @@ export const DEFAULT_TAB_DORM_CONFIG: TabDormConfig = {
     routing: {
       enabled: true,
       reRouteAlreadyGrouped: false,
+      autoGroupByDomain: true,
       rules: [],
     },
   },
@@ -151,6 +152,7 @@ export function resolveConfig(raw: unknown): TabDormConfig {
       routing: {
         enabled: readBool(r['enabled'], DEFAULT_TAB_DORM_CONFIG.groups.routing.enabled),
         reRouteAlreadyGrouped: readBool(r['reRouteAlreadyGrouped'], DEFAULT_TAB_DORM_CONFIG.groups.routing.reRouteAlreadyGrouped),
+        autoGroupByDomain: readBool(r['autoGroupByDomain'], DEFAULT_TAB_DORM_CONFIG.groups.routing.autoGroupByDomain),
         rules: readRules(r['rules']),
       },
     },

@@ -1,4 +1,5 @@
 import type { AutoRouteRule } from '@/types';
+import { syntheticGroupForUrl, type GroupTarget } from './domain-groups';
 import { getConfig } from './config-store';
 import { isBenignRuntimeError } from './discard';
 
@@ -37,6 +38,23 @@ export function matchRuleForUrl(url: string, rules: readonly AutoRouteRule[]): A
 }
 
 /**
+ * Group target for a URL under the current routing config: the first matching
+ * user rule wins; with autoGroupByDomain the site's own group is the fallback.
+ * Returns null when nothing applies.
+ */
+export function decideGroupTarget(
+  url: string,
+  routing: { autoGroupByDomain: boolean; rules: readonly AutoRouteRule[] },
+): GroupTarget | null {
+  const rule = matchRuleForUrl(url, routing.rules);
+  if (rule !== null) {
+    return { groupTitle: rule.groupTitle, groupColor: rule.groupColor, autoCollapse: rule.autoCollapse === true };
+  }
+  if (!routing.autoGroupByDomain) return null;
+  return syntheticGroupForUrl(url);
+}
+
+/**
  * Domain Auto-Routing entry point. Caller guarantees frameId === 0.
  * Pinned tabs are always exempt; already-grouped tabs are exempt unless
  * reRouteAlreadyGrouped is enabled. The tab joins an existing group with the
@@ -49,11 +67,11 @@ export async function routeCommittedNavigation(
   if (!/^https?:/i.test(url)) return;
   const config = await getConfig();
   const routing = config.groups.routing;
-  if (!routing.enabled || routing.rules.length === 0) return;
-  const rule = matchRuleForUrl(url, routing.rules);
-  if (!rule) return;
+  if (!routing.enabled) return;
+  const target = decideGroupTarget(url, routing);
+  if (target === null) return;
 
-  await routeSingleTab(details.tabId, rule, routing.reRouteAlreadyGrouped);
+  await routeSingleTab(details.tabId, target, routing.reRouteAlreadyGrouped);
 }
 
 /**
@@ -63,7 +81,7 @@ export async function routeCommittedNavigation(
  */
 async function routeSingleTab(
   tabId: number,
-  rule: AutoRouteRule,
+  target: GroupTarget,
   reRouteAlreadyGrouped: boolean,
 ): Promise<boolean> {
   let tab: chrome.tabs.Tab;
@@ -78,7 +96,7 @@ async function routeSingleTab(
   const isGrouped = tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE;
   if (isGrouped && !reRouteAlreadyGrouped) return false;
   try {
-    await attachTabToRuleGroup(tab.id, tab.windowId, rule);
+    await attachTabToGroup(tab.id, tab.windowId, target);
   } catch (error) {
     if (!isBenignRuntimeError(error)) {
       console.warn('[tabdorm] auto-routing failed.', error);
@@ -88,21 +106,21 @@ async function routeSingleTab(
   return true;
 }
 
-async function attachTabToRuleGroup(
+async function attachTabToGroup(
   tabId: number,
   windowId: number,
-  rule: AutoRouteRule,
+  target: GroupTarget,
 ): Promise<void> {
   const existing = await chrome.tabGroups.query({
     windowId,
-    title: rule.groupTitle,
-    color: rule.groupColor,
+    title: target.groupTitle,
+    color: target.groupColor,
   });
-  const target = existing.at(0);
-  if (target !== undefined) {
-    await chrome.tabs.group({ tabIds: [tabId], groupId: target.id });
-    if (rule.autoCollapse === true && target.collapsed === false) {
-      await chrome.tabGroups.update(target.id, { collapsed: true });
+  const group = existing.at(0);
+  if (group !== undefined) {
+    await chrome.tabs.group({ tabIds: [tabId], groupId: group.id });
+    if (target.autoCollapse && group.collapsed === false) {
+      await chrome.tabGroups.update(group.id, { collapsed: true });
     }
     return;
   }
@@ -111,9 +129,9 @@ async function attachTabToRuleGroup(
     createProperties: { windowId },
   });
   await chrome.tabGroups.update(newGroupId, {
-    title: rule.groupTitle,
-    color: rule.groupColor,
-    collapsed: rule.autoCollapse === true,
+    title: target.groupTitle,
+    color: target.groupColor,
+    collapsed: target.autoCollapse,
   });
 }
 
@@ -125,15 +143,15 @@ async function attachTabToRuleGroup(
 export async function backfillRouting(): Promise<{ routed: number }> {
   const config = await getConfig();
   const routing = config.groups.routing;
-  if (!routing.enabled || routing.rules.length === 0) return { routed: 0 };
+  if (!routing.enabled) return { routed: 0 };
   const tabs = await chrome.tabs.query({});
   let routed = 0;
   for (const tab of tabs) {
     const url = tab.url ?? '';
     if (!/^https?:/i.test(url) || tab.id === undefined) continue;
-    const rule = matchRuleForUrl(url, routing.rules);
-    if (rule === null) continue;
-    const didRoute = await routeSingleTab(tab.id, rule, routing.reRouteAlreadyGrouped);
+    const target = decideGroupTarget(url, routing);
+    if (target === null) continue;
+    const didRoute = await routeSingleTab(tab.id, target, routing.reRouteAlreadyGrouped);
     if (didRoute) routed += 1;
   }
   return { routed };

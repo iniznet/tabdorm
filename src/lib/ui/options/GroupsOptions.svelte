@@ -104,6 +104,12 @@
       hint="Otherwise a tab keeps whatever group it is in once grouped."
       onChange={(v) => onChange((d) => (d.groups.routing.reRouteAlreadyGrouped = v))}
     />
+    <Toggle
+      checked={config.groups.routing.autoGroupByDomain}
+      label="Auto-group sites without a rule"
+      hint="Tabs group by site automatically (title + color from the domain); rules below override it."
+      onChange={(v) => onChange((d) => (d.groups.routing.autoGroupByDomain = v))}
+    />
 
     <div class="py-2.5">
       <div class="flex items-center justify-between">

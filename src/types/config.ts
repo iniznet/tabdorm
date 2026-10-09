@@ -41,6 +41,8 @@ export interface TabDormConfig {
     routing: {
       enabled: boolean;
       reRouteAlreadyGrouped: boolean;
+      /** Zero-config fallback: group tabs by site when no rule matches. */
+      autoGroupByDomain: boolean;
       rules: AutoRouteRule[];
     };
   };
