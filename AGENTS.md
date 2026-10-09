@@ -17,4 +17,5 @@
 - **Design tokens:** all surfaces use the `@theme` palette in `src/app.css` (`surface/raised/overlay/line/ink/dim/faint/accent/good/warn/bad`) — never a raw hex or `neutral-800`-style default in a component.
 - **Options page:** every config knob must be editable in `src/entrypoints/options/`; UI writes go through `resolveConfig()` (single write path, DangerZone's `update` pattern) — never raw `chrome.storage` sets.
 - **Battery state:** the service worker may lack `navigator.getBattery`; `core/battery.ts` feature-detects it and otherwise falls back to `reportBattery` messages from UI surfaces (10-min staleness ceiling) — never assume the SW can read battery directly.
-- **Verification:** `npx tsc --noEmit` + `npx svelte-check` + `npx wxt build` + `npx tsx tasks/step*-smoke-probes.ts` before every commit.
+- **Verification:** `npx tsc --noEmit` + `npx svelte-check` + `npx wxt build` before every commit.
+- **Duplicates:** URL comparison ALWAYS goes through `normalizeUrl()` in `core/duplicates.ts` (strips hash + www + tracking params, sorts query) — never raw `tab.url` equality. The core module is chrome-free; the chrome-touching closer lives in `core/close-duplicates.ts` and must keep skipping active + dirty-form tabs.

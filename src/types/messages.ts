@@ -15,6 +15,7 @@ export type BackgroundRequest =
   | { type: 'migrateTms' }
   | { type: 'openUrlList'; urls: string[] }
   | { type: 'reportBattery'; charging: boolean }
+  | { type: 'closeDuplicates'; tabIds: number[] }
   | { type: 'dirtyForm' }
   | { type: 'clearDirtyForm' };
 
@@ -32,6 +33,7 @@ const REQUEST_TYPES: readonly RequestType[] = [
   'migrateTms',
   'openUrlList',
   'reportBattery',
+  'closeDuplicates',
   'dirtyForm',
   'clearDirtyForm',
 ];
@@ -60,6 +62,18 @@ export function parseBackgroundRequest(raw: unknown): { ok: true; request: Backg
       const tabId = candidate['tabId'];
       if (typeof tabId !== 'number' || !Number.isInteger(tabId)) return { ok: false, error: 'suspendTab requires an integer tabId.' };
       return { ok: true, request: { type, tabId } };
+    }
+    case 'closeDuplicates': {
+      const tabIds = candidate['tabIds'];
+      if (
+        !Array.isArray(tabIds) ||
+        tabIds.length === 0 ||
+        tabIds.length > 500 ||
+        tabIds.some((t) => typeof t !== 'number' || !Number.isInteger(t) || t <= 0)
+      ) {
+        return { ok: false, error: 'closeDuplicates requires a non-empty array of positive integer tab ids (max 500).' };
+      }
+      return { ok: true, request: { type, tabIds: tabIds as number[] } };
     }
     case 'reportBattery': {
       const charging = candidate['charging'];

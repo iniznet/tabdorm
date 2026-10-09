@@ -7,6 +7,7 @@ import { restoreSession, openUrlListPaced } from '@/core/restoration';
 import { applyFormGuardSync, clearDirtyForm, markDirtyForm } from '@/core/form-guard';
 import { reportBatteryState } from '@/core/battery';
 import { discardTabSafe, flushPendingDiscard } from '@/core/discard';
+import { closeDuplicateTabs } from '@/core/close-duplicates';
 import { initIdleGuard } from '@/core/idle-guard';
 import { routeCommittedNavigation } from '@/core/auto-route';
 import { maybeAutoBackup, registerSnapshotAlarmListener, runAutoSnapshot, saveUserSnapshot, syncSnapshotAlarm } from '@/core/snapshots';
@@ -142,6 +143,8 @@ async function handleMessage(
       return openUrlListPaced(request.urls);
     case 'reportBattery':
       return reportBatteryState(request.charging);
+    case 'closeDuplicates':
+      return closeDuplicateTabs(request.tabIds);
     case 'dirtyForm': {
       const tabId = sender.tab?.id;
       if (tabId !== undefined) await markDirtyForm(tabId);
