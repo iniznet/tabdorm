@@ -96,6 +96,23 @@
     await refresh();
   }
 
+  /** Closes every non-pinned tab sharing the row's hostname in this window, including the row itself. */
+  async function closeRelated(tab: LiveRow): Promise<void> {
+    const host = HOSTNAME(tab.url);
+    const related = rows.filter((r) => !r.pinned && HOSTNAME(r.url) === host);
+    if (related.length <= 1) {
+      await closeTab(tab.tabId);
+      return;
+    }
+    if (!window.confirm(`Close ${related.length} "${host}" tabs?`)) return;
+    try {
+      await chrome.tabs.remove(related.map((r) => r.tabId));
+    } catch {
+      // Some tabs may already be gone — the change listeners refresh the list.
+    }
+    await refresh();
+  }
+
   async function closeTab(tabId: number): Promise<void> {
     try {
       await chrome.tabs.remove(tabId);
@@ -185,6 +202,11 @@
                   ? `${HOSTNAME(tab.url)} is whitelisted`
                   : `Never suspend ${HOSTNAME(tab.url)}`}
                 onclick={() => void whitelist(tab)}>🛡</button
+              >
+              <button
+                class="shrink-0 grid h-5 w-5 place-items-center rounded text-[10px] text-faint opacity-0 group-hover:opacity-100 hover:bg-line hover:text-ink"
+                title="Close all tabs from {HOSTNAME(tab.url)} in this window"
+                onclick={() => void closeRelated(tab)}>⧉</button
               >
               <button
                 class="shrink-0 grid h-5 w-5 place-items-center rounded text-[10px] text-faint opacity-0 group-hover:opacity-100 hover:bg-line hover:text-bad"

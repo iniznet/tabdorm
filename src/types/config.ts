@@ -28,6 +28,10 @@ export interface TabDormConfig {
       urlPatterns: string[];
       protectedGroupColors: GroupColor[];
       protectedGroupTitles: string[];
+      /** Opt-in: never suspend a tab with unsaved form input (draft protection). */
+      unsavedForms: boolean;
+      /** Opt-in: never suspend while the machine is running on battery. */
+      onBattery: boolean;
     };
   };
   groups: {

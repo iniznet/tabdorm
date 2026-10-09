@@ -25,6 +25,9 @@ Restoring a 50+ tab session never blocks the CPU:
 - `restoration.restoreAsDiscarded` creates background tabs in the discarded state so they cost no memory until activated.
 - **Contiguity rule:** Chromium groups must be physically contiguous. Restored tabs are ordered by index and group slices are grouped atomically (`chrome.tabs.group({ tabIds })`) so the strip never scrambles.
 - Window geometry is clamped against the current screen’s `availWidth/availHeight` before window creation, so sessions restored onto a smaller monitor never open off-screen.
+- **Selective restore:** the detail view lets you cherry-pick individual tabs (addressed by snapshot position, `{windowIndex, tabIndex}`) and choose a destination — original windows (default), one merged new window (groups rebuilt from the merged slices), or appended to the caller’s current window (groups deliberately left untouched so the live strip is never disturbed). Pinned state is preserved in every destination.
+- **Paste-links import:** arbitrary text is scanned for unique http(s) URLs (capped at 500) in `core/url-extract.ts`; the extracted list can be opened as paced tabs or saved directly as a session.
+- **Collections** (`core/db/collections.ts`, Dexie v2 table) are user-curated, named, color-coded, pinnable tab lists with duplicate-URL detection — a lighter organizational layer on top of snapshots.
 
 ## TMS migration
 

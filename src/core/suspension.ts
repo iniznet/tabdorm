@@ -4,6 +4,8 @@ import { ruleToRegExp } from './auto-route';
 import { getConfig } from './config-store';
 import { discardTabSafe } from './discard';
 import { safeTabUrl } from './sanitize';
+import { getDirtyFormTabs } from './form-guard';
+import { getBatteryState } from './battery';
 
 export const SWEEP_ALARM = 'tabdorm:sweep';
 
@@ -21,6 +23,9 @@ export interface SuspensionInput {
   isWindowFocused: boolean;
   isPinned: boolean;
   isAudible: boolean;
+  hasUnsavedInput: boolean;
+  /** Resolved exemption power state: config onBattery AND machine is discharging. */
+  onBatteryPower: boolean;
   url: string;
   groupColor?: GroupColor;
   groupTitle?: string;
@@ -35,6 +40,8 @@ export interface SuspensionInput {
     urlPatterns: readonly string[];
     protectedGroupColors: readonly GroupColor[];
     protectedGroupTitles: readonly string[];
+    unsavedForms: boolean;
+    onBattery: boolean;
   };
 }
 
@@ -52,6 +59,8 @@ export function evaluateSuspension(input: SuspensionInput): SuspensionVerdict {
   }
   if (input.isPinned && input.exemptions.pinnedTabs) return { action: 'skip', reason: 'pinned_exempt' };
   if (input.isAudible && input.exemptions.audibleTabs) return { action: 'skip', reason: 'audible_exempt' };
+  if (input.hasUnsavedInput && input.exemptions.unsavedForms) return { action: 'skip', reason: 'unsaved_form' };
+  if (input.onBatteryPower && input.exemptions.onBattery) return { action: 'skip', reason: 'on_battery' };
   if (input.groupColor !== undefined && input.exemptions.protectedGroupColors.includes(input.groupColor)) {
     return { action: 'shield', reason: 'protected_group_color' };
   }
@@ -103,6 +112,8 @@ export async function runSweepOnce(): Promise<SweepSummary> {
   const summary: SweepSummary = { status: 'ran', evaluated: 0, discarded: 0, shielded: 0, unshielded: 0 };
   const exclusive = config.suspension.memorySaverPolicy === 'exclusive';
   const now = Date.now();
+  const dirtyTabs = config.suspension.exemptions.unsavedForms ? await getDirtyFormTabs() : new Set<number>();
+  const onBattery = config.suspension.exemptions.onBattery ? (await getBatteryState()).discharging : false;
 
   for (const tab of tabs) {
     if (tab.id === undefined || tab.windowId === undefined) continue;
@@ -113,6 +124,8 @@ export async function runSweepOnce(): Promise<SweepSummary> {
       isWindowFocused: windowById.get(tab.windowId)?.focused === true,
       isPinned: tab.pinned === true,
       isAudible: tab.audible === true,
+      hasUnsavedInput: dirtyTabs.has(tab.id),
+      onBatteryPower: onBattery,
       url: safeTabUrl(tab),
       groupColor: group?.color,
       groupTitle: group?.title,

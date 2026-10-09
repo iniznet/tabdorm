@@ -1,5 +1,7 @@
 import { getLastActivity } from './activity';
+import { getBatteryState } from './battery';
 import { getConfig } from './config-store';
+import { getDirtyFormTabs } from './form-guard';
 import { discardTabSafe } from './discard';
 import { safeTabUrl } from './sanitize';
 import { evaluateSuspension } from './suspension';
@@ -91,9 +93,11 @@ async function handleActivation(info: { tabId: number; windowId: number }): Prom
 async function suspendCollapsedGroup(groupId: number): Promise<void> {
   const config = await getConfig();
   if (!config.groups.suspendOnGroupCollapse) return;
-  const [tabs, group] = await Promise.all([
+  const [tabs, group, dirtyTabs, battery] = await Promise.all([
     chrome.tabs.query({ groupId }),
     chrome.tabGroups.get(groupId).catch(() => undefined),
+    config.suspension.exemptions.unsavedForms ? getDirtyFormTabs() : Promise.resolve(new Set<number>()),
+    config.suspension.exemptions.onBattery ? getBatteryState() : Promise.resolve({ discharging: false } as const),
   ]);
   for (const tab of tabs) {
     if (tab.id === undefined || tab.active) continue;
@@ -102,6 +106,8 @@ async function suspendCollapsedGroup(groupId: number): Promise<void> {
       isWindowFocused: false,
       isPinned: tab.pinned === true,
       isAudible: tab.audible === true,
+      hasUnsavedInput: dirtyTabs.has(tab.id),
+      onBatteryPower: battery.discharging,
       url: safeTabUrl(tab),
       groupColor: group?.color,
       groupTitle: group?.title,

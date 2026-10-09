@@ -3,6 +3,8 @@
   import { get } from 'svelte/store';
   import { putSession } from '@/core/db';
   import { parseImportedSession } from '@/core/session-import';
+  import { extractUrls } from '@/core/url-extract';
+  import type { RestoreDestination, RestoreSelectionEntry } from '@/types/messages';
   import type { UnifiedSession } from '@/types';
 
   interface Props {
@@ -11,13 +13,20 @@
     hasMore: boolean;
     loading: boolean;
     onSelect: (session: UnifiedSession) => void;
-    onRestore: (session: UnifiedSession) => void;
+    onRestore: (session: UnifiedSession, options?: { destination?: RestoreDestination; selection?: RestoreSelectionEntry[] }) => void;
     onDelete: (session: UnifiedSession) => void;
     onLoadMore: () => void;
     onImported: () => void;
+    onOpenUrls: (urls: string[]) => void;
+    onSaveUrls: (urls: string[]) => void;
   }
 
-  let { sessions, busyId, hasMore, loading, onSelect, onRestore, onDelete, onLoadMore, onImported }: Props = $props();
+  let { sessions, busyId, hasMore, loading, onSelect, onRestore, onDelete, onLoadMore, onImported, onOpenUrls, onSaveUrls }: Props = $props();
+
+  let pasteOpen = $state(false);
+  let pasteText = $state('');
+  let pasteError = $state('');
+  const pastedUrls = $derived(extractUrls(pasteText));
 
   let scrollEl: HTMLDivElement | undefined = $state();
   let query = $state('');
@@ -114,10 +123,37 @@
         e.currentTarget.value = '';
       }}
     />
+    <button class="text-[11px] text-dim hover:text-ink" onclick={() => (pasteOpen = !pasteOpen)}>⌨ Paste links…</button>
     {#if importError !== null}
       <span class="text-[11px] text-bad">{importError}</span>
     {/if}
   </div>
+  {#if pasteOpen}
+    <div class="mb-1 rounded-lg border border-line bg-overlay p-2">
+      <textarea
+        class="h-20 w-full resize-y rounded-md border border-line bg-raised px-2 py-1 text-xs text-ink placeholder:text-faint"
+        placeholder="Paste anything containing links — an email, markdown, a list of URLs…"
+        bind:value={pasteText}></textarea>
+      <div class="mt-1 flex items-center gap-2">
+        <span class="text-[11px] text-faint">
+          {pasteText.trim() === '' ? 'Waiting for text…' : `${pastedUrls.length} unique URL${pastedUrls.length === 1 ? '' : 's'} found`}
+        </span>
+        <button
+          class="ml-auto rounded-md border border-line px-2 py-1 text-[11px] text-dim hover:border-faint hover:text-ink disabled:opacity-50"
+          disabled={pastedUrls.length === 0}
+          onclick={() => { onOpenUrls(pastedUrls); pasteOpen = false; pasteText = ''; }}>Open as tabs</button
+        >
+        <button
+          class="rounded-md bg-accent px-2 py-1 text-[11px] font-medium text-white hover:bg-accent-strong disabled:opacity-50"
+          disabled={pastedUrls.length === 0}
+          onclick={() => { onSaveUrls(pastedUrls); pasteOpen = false; pasteText = ''; }}>Save as session</button
+        >
+        {#if pasteError !== ''}
+          <span class="text-[11px] text-bad">{pasteError}</span>
+        {/if}
+      </div>
+    </div>
+  {/if}
   <div bind:this={scrollEl} class="min-h-0 flex-1 overflow-y-auto rounded-lg border border-line bg-raised/60">
     <div class="relative w-full" style="height:{total}px">
       {#each rows as row (row.key)}

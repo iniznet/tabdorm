@@ -1,4 +1,6 @@
+import { getBatteryState } from './battery';
 import { getConfig, saveConfig } from './config-store';
+import { getDirtyFormTabs } from './form-guard';
 import { discardTabSafe } from './discard';
 import { evaluateSuspension } from './suspension';
 import { safeTabUrl } from './sanitize';
@@ -51,6 +53,8 @@ export async function suspendOtherTabs(windowId: number): Promise<number> {
     chrome.tabGroups.query({ windowId }),
   ]);
   const groupById = new Map(groups.map((g) => [g.id, g]));
+  const dirtyTabs = config.suspension.exemptions.unsavedForms ? await getDirtyFormTabs() : new Set<number>();
+  const onBattery = config.suspension.exemptions.onBattery ? (await getBatteryState()).discharging : false;
   let suspended = 0;
   for (const tab of tabs) {
     if (tab.id === undefined || tab.active) continue;
@@ -63,6 +67,8 @@ export async function suspendOtherTabs(windowId: number): Promise<number> {
       isWindowFocused: false,
       isPinned: tab.pinned === true,
       isAudible: tab.audible === true,
+      hasUnsavedInput: dirtyTabs.has(tab.id),
+      onBatteryPower: onBattery,
       url: safeTabUrl(tab),
       groupColor: group?.color,
       groupTitle: group?.title,
@@ -97,4 +103,25 @@ async function neverSuspendSite(tabId: number, url: string): Promise<void> {
     });
   }
   await chrome.tabs.update(tabId, { autoDiscardable: false }).catch(() => undefined);
+}
+
+/** Adds the site's hostname pattern if absent, removes it if present. */
+export async function toggleWhitelistForTab(tabId: number, url: string): Promise<'added' | 'removed' | 'ignored'> {
+  const pattern = hostnamePattern(url);
+  if (pattern === null) return 'ignored';
+  const config = await getConfig();
+  const patterns = config.suspension.exemptions.urlPatterns;
+  if (patterns.includes(pattern)) {
+    await saveConfig({
+      ...config,
+      suspension: {
+        ...config.suspension,
+        exemptions: { ...config.suspension.exemptions, urlPatterns: patterns.filter((p) => p !== pattern) },
+      },
+    });
+    await chrome.tabs.update(tabId, { autoDiscardable: true }).catch(() => undefined);
+    return 'removed';
+  }
+  await neverSuspendSite(tabId, url);
+  return 'added';
 }

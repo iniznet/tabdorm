@@ -19,6 +19,8 @@ export const DEFAULT_TAB_DORM_CONFIG: TabDormConfig = {
       urlPatterns: [],
       protectedGroupColors: [],
       protectedGroupTitles: [],
+      unsavedForms: false,
+      onBattery: false,
     },
   },
   groups: {
@@ -138,6 +140,8 @@ export function resolveConfig(raw: unknown): TabDormConfig {
           ? ex['protectedGroupColors'].filter(isGroupColor)
           : [],
         protectedGroupTitles: readStringArray(ex['protectedGroupTitles']),
+        unsavedForms: readBool(ex['unsavedForms'], DEFAULT_TAB_DORM_CONFIG.suspension.exemptions.unsavedForms),
+        onBattery: readBool(ex['onBattery'], DEFAULT_TAB_DORM_CONFIG.suspension.exemptions.onBattery),
       },
     },
     groups: {

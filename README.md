@@ -15,6 +15,13 @@ TabDorm is an open-source Chromium (Manifest V3) extension that frees memory by 
 - **Session snapshots** — periodic auto-snapshots with hash deduplication and retention caps, manual snapshots, closed-window capture, JSON export/import, and paced multi-window restoration that never spikes CPU.
 - **TMS migration** — one-click import of The Marvellous Suspender tabs, decoding `suspended.html#uri=…` links back to their real URLs.
 - **Memory-saver defense** — whitelisted and protected tabs are shielded from Chrome’s own Memory Saver via `autoDiscardable: false`.
+- **Draft protection (opt-in)** — tabs with unsaved form input are never suspended; requires an explicit permission grant.
+- **Battery guard (opt-in)** — suspension pauses while the machine runs on battery.
+- **Collections** — save the current window’s tabs as named, color-coded, pinnable sets with duplicate detection.
+- **Paste-links import** — paste any text (email, markdown, CSV); TabDorm extracts the URLs and opens them as tabs or saves them as a session.
+- **Selective restoration** — cherry-pick individual tabs from a snapshot and restore to the original windows, one new window, or the current window.
+- **Unified search** — one box searching open tabs, saved sessions, and collections (`in:open`, `in:sessions`, `in:collections` scope prefixes).
+- **Customizable shortcuts** — five commands (suspend current/others, wake current, snapshot, toggle whitelist) rebindable at `chrome://extensions/shortcuts`.
 
 ## How it works
 
@@ -52,9 +59,10 @@ Then in Chrome: `chrome://extensions` → enable *Developer mode* → *Load unpa
 | `webNavigation` | Top-frame navigation events for routing and the discard race guard |
 | `idle` | Sleep Avalanche Guard (wake detection) |
 | `sidePanel` | The main management UI |
+| `scripting` + `<all_urls>` *(optional)* | Only requested if you enable draft protection — registers a tiny watcher that reports unsaved form input |
 | `contextMenus` | Tab right-click actions |
 
-No `<all_urls>`, no host permissions, no content scripts, no remote code, no analytics, no telemetry.
+No host permissions by default, no remote code, no analytics, no telemetry. The only content script (draft protection) is strictly opt-in and installed only after you grant the permission in Options.
 
 ## Privacy
 

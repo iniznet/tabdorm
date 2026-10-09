@@ -16,4 +16,5 @@
 - **Group collapse:** every collapse source funnels through the single `tabGroups.onUpdated` reaction point in `core/group-collapse.ts` (`suspendOnGroupCollapse`); never add per-source discard logic. Collapse-transition detection is stateful (`collapsedState` map) because `tabGroups.onUpdated` delivers no changeInfo in @types/chrome 0.3.x.
 - **Design tokens:** all surfaces use the `@theme` palette in `src/app.css` (`surface/raised/overlay/line/ink/dim/faint/accent/good/warn/bad`) — never a raw hex or `neutral-800`-style default in a component.
 - **Options page:** every config knob must be editable in `src/entrypoints/options/`; UI writes go through `resolveConfig()` (single write path, DangerZone's `update` pattern) — never raw `chrome.storage` sets.
+- **Battery state:** the service worker may lack `navigator.getBattery`; `core/battery.ts` feature-detects it and otherwise falls back to `reportBattery` messages from UI surfaces (10-min staleness ceiling) — never assume the SW can read battery directly.
 - **Verification:** `npx tsc --noEmit` + `npx svelte-check` + `npx wxt build` + `npx tsx tasks/step*-smoke-probes.ts` before every commit.

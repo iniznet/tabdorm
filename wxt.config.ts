@@ -22,6 +22,8 @@ export default defineConfig({
       'sidePanel',
       'contextMenus',
     ],
+    optional_permissions: ['scripting'],
+    optional_host_permissions: ['<all_urls>'],
     commands: {
       'tabdorm-suspend-others': {
         suggested_key: { default: 'Ctrl+Shift+S' },
@@ -29,6 +31,15 @@ export default defineConfig({
       },
       'tabdorm-snapshot-now': {
         description: 'Take a session snapshot now',
+      },
+      'tabdorm-suspend-current': {
+        description: 'Suspend the active tab',
+      },
+      'tabdorm-unsuspend-current': {
+        description: 'Wake (reload) the active tab if suspended',
+      },
+      'tabdorm-toggle-whitelist-site': {
+        description: 'Toggle never-suspend for the active tab site',
       },
     },
     minimum_chrome_version: '116',

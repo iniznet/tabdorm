@@ -1,4 +1,5 @@
 import type { StoredWindow, TabDormConfig } from '@/types';
+import type { RestoreDestination, RestoreSelectionEntry } from '@/types/messages';
 import { getConfig } from './config-store';
 import { getSession } from './db';
 import { scheduleDiscardOnCommit } from './discard';
@@ -62,14 +63,118 @@ interface CreatedTab {
  * 4. Rebuilds groups from contiguous index-order slices — Chromium requires
  *    group members to be physically contiguous — one atomic tabs.group per slice.
  */
-export async function restoreSession(sessionId: string, viewport?: Viewport): Promise<RestoreProgress> {
+export interface RestoreOptions {
+  destination?: RestoreDestination;
+  /** Empty/absent restores every tab. Entries address tabs by snapshot position. */
+  selection?: RestoreSelectionEntry[];
+  /** Caller's window id — required for destination 'current'. */
+  currentWindowId?: number;
+}
+
+/**
+ * Restores a session with flexible targeting: every tab (default), a cherry-picked
+ * selection, into their original windows, merged into one new window, or appended
+ * to the caller's current window. Pacing and discard guards apply everywhere.
+ */
+export async function restoreSession(
+  sessionId: string,
+  viewport?: Viewport,
+  options: RestoreOptions = {},
+): Promise<RestoreProgress> {
   const session = await getSession(sessionId);
   if (session === undefined) throw new Error(`Session ${sessionId} not found.`);
   const config = await getConfig();
   const progress: RestoreProgress = { windowsRestored: 0, tabsCreated: 0, tabsFailed: 0, groupsRestored: 0 };
-  for (const win of session.windows) {
+  const windows = selectWindows(session.windows, options.selection);
+  const destination: RestoreDestination = options.destination ?? 'original';
+  if (destination === 'current') {
+    if (options.currentWindowId === undefined) {
+      throw new Error('Current-window restore requires the caller window id.');
+    }
+    await appendToWindow(windows, options.currentWindowId, config, progress);
+    return progress;
+  }
+  if (destination === 'single') {
+    const merged = mergeWindows(windows);
+    if (merged.tabs.length > 0) await restoreWindow(merged, config, undefined, progress);
+    return progress;
+  }
+  for (const win of windows) {
     if (win.tabs.length === 0) continue;
     await restoreWindow(win, config, viewport, progress);
+  }
+  return progress;
+}
+
+/** Applies a position-based cherry-pick selection; group metadata follows the tabs. */
+function selectWindows(windows: StoredWindow[], selection?: RestoreSelectionEntry[]): StoredWindow[] {
+  if (selection === undefined || selection.length === 0) return windows;
+  const byWindow = new Map<number, Set<number>>();
+  for (const entry of selection) {
+    const set = byWindow.get(entry.windowIndex) ?? new Set<number>();
+    set.add(entry.tabIndex);
+    byWindow.set(entry.windowIndex, set);
+  }
+  return windows.map((win, windowIndex) => {
+    const wanted = byWindow.get(windowIndex);
+    if (wanted === undefined || wanted.size === 0) return { ...win, tabs: [], groups: [] };
+    const tabs = win.tabs.filter((_, tabIndex) => wanted.has(tabIndex));
+    const usedKeys = new Set(tabs.map((t) => t.groupKey).filter((k) => k !== undefined));
+    return { ...win, tabs, groups: win.groups.filter((g) => usedKeys.has(g.key)) };
+  });
+}
+
+/** Merges selected windows into one synthetic window for single-window restore. */
+function mergeWindows(windows: StoredWindow[]): StoredWindow {
+  const groups = new Map<string, StoredWindow['groups'][number]>();
+  const tabs: StoredWindow['tabs'] = [];
+  for (const win of windows) {
+    for (const group of win.groups) {
+      if (!groups.has(group.key)) groups.set(group.key, group);
+    }
+    tabs.push(...win.tabs);
+  }
+  return { state: 'normal', groups: [...groups.values()], tabs };
+}
+
+/** Appends tabs into an existing window. Groups are left untouched by design —
+ *  regrouping would disturb the user's live tab strip. */
+async function appendToWindow(
+  windows: StoredWindow[],
+  windowId: number,
+  config: TabDormConfig,
+  progress: RestoreProgress,
+): Promise<void> {
+  const rest = config.restoration;
+  for (const win of windows) {
+    for (const tab of win.tabs) {
+      try {
+        await chrome.tabs.create({ windowId, url: tab.url, pinned: tab.pinned, active: false });
+        progress.tabsCreated += 1;
+      } catch {
+        progress.tabsFailed += 1;
+      }
+      if (rest.delayBetweenTabsMs > 0) await sleep(rest.delayBetweenTabsMs);
+    }
+  }
+}
+
+/** Opens an ad-hoc URL list (text import) with the same pacing guarantees. */
+export async function openUrlListPaced(urls: readonly string[]): Promise<RestoreProgress> {
+  const config = await getConfig();
+  const rest = config.restoration;
+  const progress: RestoreProgress = { windowsRestored: 0, tabsCreated: 0, tabsFailed: 0, groupsRestored: 0 };
+  let windowId: number | undefined;
+  for (const url of urls) {
+    try {
+      if (windowId === undefined) windowId = (await chrome.windows.getLastFocused()).id;
+      const created = await chrome.tabs.create({ windowId, url, active: false });
+      if (created.id === undefined) progress.tabsFailed += 1;
+      else progress.tabsCreated += 1;
+    } catch {
+      progress.tabsFailed += 1;
+    }
+    if (rest.delayBetweenTabsMs > 0) await sleep(rest.delayBetweenTabsMs);
   }
   return progress;
 }

@@ -40,6 +40,24 @@ export interface StoredWindow {
 
 export type SessionType = 'auto_snapshot' | 'user_saved' | 'closed_window';
 
+/** Serializable reference to one tab inside a collection (no window context). */
+export interface CollectionTab {
+  url: string;
+  title: string;
+  favIconUrl?: string;
+}
+
+/** User-curated, named, ordered set of tabs. Not a session snapshot. */
+export interface TabCollection {
+  id: string;
+  name: string;
+  color?: GroupColor;
+  pinned: boolean;
+  tabs: CollectionTab[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 /** Unified session record persisted to IndexedDB via Dexie. */
 export interface UnifiedSession {
   id: string;

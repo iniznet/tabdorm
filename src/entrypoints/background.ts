@@ -2,8 +2,10 @@ import { runSweepOnce, syncSweepAlarm, SWEEP_ALARM } from '@/core/suspension';
 import { collapseIdleGroups, initGroupCollapse } from '@/core/group-collapse';
 import { ensureColdStartSeeded, forgetActivity, touchActivity } from '@/core/activity';
 import { updateAsleepBadge } from '@/core/badge';
-import { initContextMenus, suspendOtherTabs } from '@/core/context-menus';
-import { restoreSession } from '@/core/restoration';
+import { initContextMenus, suspendOtherTabs, toggleWhitelistForTab } from '@/core/context-menus';
+import { restoreSession, openUrlListPaced } from '@/core/restoration';
+import { applyFormGuardSync, clearDirtyForm, markDirtyForm } from '@/core/form-guard';
+import { reportBatteryState } from '@/core/battery';
 import { discardTabSafe, flushPendingDiscard } from '@/core/discard';
 import { initIdleGuard } from '@/core/idle-guard';
 import { routeCommittedNavigation } from '@/core/auto-route';
@@ -37,7 +39,7 @@ export default defineBackground(() => {
   initGroupCollapse();
   registerSnapshotAlarmListener(shadowTree);
   registerActivityTracking();
-  registerBackgroundMessageHandler((request) => handleMessage(request, shadowTree));
+  registerBackgroundMessageHandler((request, sender) => handleMessage(request, shadowTree, sender));
   chrome.commands.onCommand.addListener((command) => {
     void onCommand(command, shadowTree);
   });
@@ -52,6 +54,7 @@ export default defineBackground(() => {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'sync' || changes['tabdormConfig'] === undefined) return;
     void resyncAlarms();
+    void getConfig().then(applyFormGuardSync);
   });
   void bootstrap(shadowTree);
 });
@@ -91,6 +94,7 @@ async function onTopFrameCommitted(
 ): Promise<void> {
   if (details.frameId !== 0) return;
   await flushPendingDiscard(details.tabId);
+  await clearDirtyForm(details.tabId);
   await routeCommittedNavigation(details);
 }
 
@@ -106,11 +110,16 @@ function registerActivityTracking(): void {
   });
   chrome.tabs.onRemoved.addListener((tabId) => {
     void forgetActivity(tabId);
+    void clearDirtyForm(tabId);
     void updateAsleepBadge();
   });
 }
 
-async function handleMessage(request: BackgroundRequest, shadowTree: ShadowTree): Promise<unknown> {
+async function handleMessage(
+  request: BackgroundRequest,
+  shadowTree: ShadowTree,
+  sender: chrome.runtime.MessageSender,
+): Promise<unknown> {
   switch (request.type) {
     case 'snapshotNow':
       return saveUserSnapshot(shadowTree);
@@ -122,9 +131,27 @@ async function handleMessage(request: BackgroundRequest, shadowTree: ShadowTree)
       return outcome;
     }
     case 'restoreSession':
-      return restoreSession(request.sessionId, request.screen);
+      return restoreSession(request.sessionId, request.screen, {
+        destination: request.destination,
+        selection: request.selection,
+        currentWindowId: sender.tab?.windowId,
+      });
     case 'migrateTms':
       return migrateAll();
+    case 'openUrlList':
+      return openUrlListPaced(request.urls);
+    case 'reportBattery':
+      return reportBatteryState(request.charging);
+    case 'dirtyForm': {
+      const tabId = sender.tab?.id;
+      if (tabId !== undefined) await markDirtyForm(tabId);
+      return undefined;
+    }
+    case 'clearDirtyForm': {
+      const tabId = sender.tab?.id;
+      if (tabId !== undefined) await clearDirtyForm(tabId);
+      return undefined;
+    }
   }
 }
 
@@ -137,5 +164,21 @@ async function onCommand(command: string, shadowTree: ShadowTree): Promise<void>
   }
   if (command === 'tabdorm-snapshot-now') {
     await saveUserSnapshot(shadowTree);
+    return;
+  }
+  if (command === 'tabdorm-suspend-current') {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (tab?.id !== undefined) await discardTabSafe(tab.id);
+    await updateAsleepBadge();
+    return;
+  }
+  if (command === 'tabdorm-unsuspend-current') {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (tab?.id !== undefined && tab.discarded) await chrome.tabs.reload(tab.id).catch(() => undefined);
+    return;
+  }
+  if (command === 'tabdorm-toggle-whitelist-site') {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (tab?.id !== undefined) await toggleWhitelistForTab(tab.id, tab.url ?? '');
   }
 }

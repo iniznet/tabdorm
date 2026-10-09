@@ -2,17 +2,22 @@
   import { createVirtualizer } from '@tanstack/svelte-virtual';
   import { get } from 'svelte/store';
   import type { StoredTab, StoredWindow, UnifiedSession } from '@/types';
+  import type { RestoreDestination, RestoreSelectionEntry } from '@/types/messages';
 
   interface Props {
     session: UnifiedSession;
     busyId: string | null;
     onBack: () => void;
-    onRestore: (session: UnifiedSession) => void;
+    onRestore: (session: UnifiedSession, options?: { destination?: RestoreDestination; selection?: RestoreSelectionEntry[] }) => void;
     onRename: (session: UnifiedSession, name: string) => void;
     onDelete: (session: UnifiedSession) => void;
   }
 
   let { session, busyId, onBack, onRestore, onRename, onDelete }: Props = $props();
+
+  /** Position keys of cherry-picked tabs: "windowIndex:tabIndex". */
+  let picked = $state(new Set<string>());
+  let destination = $state<RestoreDestination>('original');
 
   interface DetailRow {
     kind: 'window' | 'tab';
@@ -20,6 +25,8 @@
     url?: string;
     tab?: StoredTab;
     groupColor?: string;
+    windowIndex?: number;
+    tabIndex?: number;
   }
 
   const rowsData = $derived.by<DetailRow[]>(() => {
@@ -27,13 +34,15 @@
     session.windows.forEach((win: StoredWindow, wi: number) => {
       const groupColors = new Map(win.groups.map((g) => [g.key, g.color]));
       out.push({ kind: 'window', label: `Window ${wi + 1} · ${win.tabs.length} tabs` });
-      for (const tab of win.tabs) {
+      for (const [ti, tab] of win.tabs.entries()) {
         out.push({
           kind: 'tab',
           label: tab.title === '' ? tab.url : tab.title,
           url: tab.url,
           tab,
           groupColor: tab.groupKey === undefined ? undefined : groupColors.get(tab.groupKey),
+          windowIndex: wi,
+          tabIndex: ti,
         });
       }
     });
@@ -83,6 +92,27 @@
     onRename(session, trimmed);
   }
 
+  function togglePick(windowIndex: number, tabIndex: number): void {
+    const key = `${windowIndex}:${tabIndex}`;
+    const next = new Set(picked);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    picked = next;
+  }
+
+  function restoreSelected(): void {
+    const selection: RestoreSelectionEntry[] = [];
+    for (const key of picked) {
+      const parts = key.split(':');
+      const windowIndex = Number(parts[0]);
+      const tabIndex = Number(parts[1]);
+      if (Number.isInteger(windowIndex) && Number.isInteger(tabIndex)) {
+        selection.push({ windowIndex, tabIndex });
+      }
+    }
+    onRestore(session, { destination, selection });
+  }
+
   function exportSession(): void {
     const url = URL.createObjectURL(new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' }));
     const anchor = document.createElement('a');
@@ -109,6 +139,18 @@
       title="Click to rename"
     />
     <button class={BTN} onclick={exportSession}>Export</button>
+    <select
+      class="rounded-md border border-line bg-overlay px-1.5 py-1 text-xs text-dim"
+      bind:value={destination}
+      title="Where the restored tabs go"
+      aria-label="Restore destination">
+      <option value="original">Original windows</option>
+      <option value="single">One new window</option>
+      <option value="current">Current window</option>
+    </select>
+    <button class={BTN} disabled={picked.size === 0 || busyId !== null} onclick={restoreSelected}>
+      Restore {picked.size === 0 ? '' : picked.size} selected
+    </button>
     <button
       class="rounded-md border border-bad/50 px-2 py-1 text-xs text-bad hover:bg-bad/10 disabled:opacity-50"
       onclick={() => onDelete(session)}>Delete</button
@@ -130,6 +172,15 @@
               <p class="py-1 pl-1.5 text-[10px] font-semibold uppercase tracking-wide text-faint">{item.label}</p>
             {:else}
               <div class="flex h-6 items-center gap-2 rounded px-1.5 text-xs hover:bg-overlay">
+                {#if item.windowIndex !== undefined && item.tabIndex !== undefined}
+                  <input
+                    type="checkbox"
+                    class="h-3 w-3 shrink-0 accent-[var(--accent)]"
+                    checked={picked.has(`${item.windowIndex}:${item.tabIndex}`)}
+                    onchange={() => togglePick(item.windowIndex as number, item.tabIndex as number)}
+                    title="Pick this tab for selective restore"
+                  />
+                {/if}
                 {#if item.groupColor}
                   <span class="h-2 w-2 shrink-0 rounded-full {groupDot(item.groupColor)}"></span>
                 {/if}

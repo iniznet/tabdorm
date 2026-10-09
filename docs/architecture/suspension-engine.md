@@ -19,10 +19,14 @@ The suspension engine puts inactive tabs to sleep using Chromium’s native `chr
 | 3 | Active tab of an unfocused window (if exemption on) | `skip` (user may bounce straight back) |
 | 4 | Pinned tab (if exemption on) | `skip` |
 | 5 | Audible tab (if exemption on) | `skip` |
-| 6 | Group color/title protected | `shield` |
-| 7 | URL matches the whitelist | `shield` |
-| 8 | Idle past the threshold | `discard` |
-| 9 | Otherwise | `unshield` (restore `autoDiscardable`) |
+| 6 | Unsaved form input (if opt-in guard on) | `skip` |
+| 7 | On battery power (if opt-in guard on) | `skip` |
+| 8 | Group color/title protected | `shield` |
+| 9 | URL matches the whitelist | `shield` |
+| 10 | Idle past the threshold | `discard` |
+| 11 | Otherwise | `unshield` (restore `autoDiscardable`) |
+
+The two opt-in guards: **unsaved form input** comes from a tiny runtime-registered content script (installed only after the user grants `scripting` + `<all_urls>` in Options) that reports typing activity; per-tab dirty flags live in `chrome.storage.session` and clear on top-frame navigation, tab close, or form submit. **Battery power** is resolved by the service worker when it has `navigator.getBattery`, otherwise UI surfaces report battery state into `chrome.storage.session` with a 10-minute staleness ceiling.
 
 `shield` does not just skip suspension — it sets `autoDiscardable: false` on the tab so **Chrome’s own Memory Saver** is also forbidden from killing it. The `memorySaverPolicy` knob controls this globally (`cooperative` = only shielded tabs are protected; `exclusive` = shield everything).
 

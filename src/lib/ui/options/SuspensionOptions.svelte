@@ -15,6 +15,25 @@
   let patternDraft = $state('');
   let patternError = $state('');
   let titleDraft = $state('');
+  let formGuardNote = $state('');
+
+  /**
+   * Draft protection needs an optional host permission — the content script that
+   * watches for unsaved input is only registered after an explicit user grant.
+   */
+  async function toggleUnsavedForms(next: boolean): Promise<void> {
+    formGuardNote = '';
+    if (!next) {
+      onChange((d) => (d.suspension.exemptions.unsavedForms = false));
+      return;
+    }
+    const granted = await chrome.permissions.request({ permissions: ['scripting'], origins: ['<all_urls>'] });
+    if (!granted) {
+      formGuardNote = 'Permission not granted — draft protection stays off.';
+      return;
+    }
+    onChange((d) => (d.suspension.exemptions.unsavedForms = true));
+  }
 
   const POLICY_OPTIONS = [
     { value: 'cooperative', label: 'Cooperative (shield whitelist only)' },
@@ -129,6 +148,21 @@
           checked={config.suspension.exemptions.activeInOtherWindows}
           label="Never suspend the active tab of other windows"
           onChange={(v) => onChange((d) => (d.suspension.exemptions.activeInOtherWindows = v))}
+        />
+        <Toggle
+          checked={config.suspension.exemptions.unsavedForms}
+          label="Never suspend tabs with unsaved form input"
+          hint="Opt-in. Asks for broad page access because a tiny watcher must observe typing on every page."
+          onChange={(v) => void toggleUnsavedForms(v)}
+        />
+        {#if formGuardNote !== ''}
+          <p class="py-1.5 text-xs text-warn" role="status">{formGuardNote}</p>
+        {/if}
+        <Toggle
+          checked={config.suspension.exemptions.onBattery}
+          label="Never suspend while on battery power"
+          hint="Suspension pauses whenever the machine is running on battery."
+          onChange={(v) => onChange((d) => (d.suspension.exemptions.onBattery = v))}
         />
       </div>
     </div>
