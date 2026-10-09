@@ -81,4 +81,4 @@ Behavioral probe suites for each milestone live in `tasks/step*-smoke-probes.ts`
 
 ## License
 
-[MIT](LICENSE)
+[GPL-3.0](LICENSE) — TabDorm is free software; version **3** of the GNU General Public License applies to all versions.

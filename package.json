@@ -4,6 +4,7 @@
   "description": "Native tab suspension, tab-group auto-routing, and session snapshots for Chromium.",
   "private": true,
   "type": "module",
+  "license": "GPL-3.0-or-later",
   "scripts": {
     "dev": "wxt",
     "build": "wxt build",
