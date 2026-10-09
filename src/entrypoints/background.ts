@@ -9,7 +9,7 @@ import { reportBatteryState } from '@/core/battery';
 import { discardTabSafe, flushPendingDiscard } from '@/core/discard';
 import { closeDuplicateTabs } from '@/core/close-duplicates';
 import { initIdleGuard } from '@/core/idle-guard';
-import { routeCommittedNavigation } from '@/core/auto-route';
+import { backfillRouting, routeCommittedNavigation } from '@/core/auto-route';
 import { maybeAutoBackup, registerSnapshotAlarmListener, runAutoSnapshot, saveUserSnapshot, syncSnapshotAlarm } from '@/core/snapshots';
 import { migrateAll } from '@/core/tms-migrate';
 import { initDatabase } from '@/core/db';
@@ -56,6 +56,7 @@ export default defineBackground(() => {
     if (area !== 'sync' || changes['tabdormConfig'] === undefined) return;
     void resyncAlarms();
     void getConfig().then(applyFormGuardSync);
+    scheduleRoutingBackfill(changes['tabdormConfig']);
   });
   void bootstrap(shadowTree);
 });
@@ -87,6 +88,26 @@ async function bootstrap(shadowTree: ShadowTree): Promise<void> {
   void initDatabase();
   await shadowTree.init();
   void updateAsleepBadge();
+  void backfillRouting();
+}
+
+/**
+ * One backfill pass per config-change burst: a rule add/edit in options fires
+ * several storage writes; only a change to the routing blob schedules a scan.
+ */
+let backfillTimer: ReturnType<typeof setTimeout> | undefined;
+let lastRoutingJson = '';
+function scheduleRoutingBackfill(change: chrome.storage.StorageChange): void {
+  const next = change.newValue;
+  if (typeof next !== 'object' || next === null) return;
+  const routingJson = JSON.stringify((next as Record<string, unknown>)['groups'] ?? null);
+  if (routingJson === lastRoutingJson) return;
+  lastRoutingJson = routingJson;
+  if (backfillTimer !== undefined) clearTimeout(backfillTimer);
+  backfillTimer = setTimeout(() => {
+    backfillTimer = undefined;
+    void backfillRouting();
+  }, 500);
 }
 
 /** Shared top-frame commit dispatcher: discard race guard, then auto-routing. */

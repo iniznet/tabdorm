@@ -53,25 +53,39 @@ export async function routeCommittedNavigation(
   const rule = matchRuleForUrl(url, routing.rules);
   if (!rule) return;
 
+  await routeSingleTab(details.tabId, rule, routing.reRouteAlreadyGrouped);
+}
+
+/**
+ * Applies one rule to one tab: pinned tabs and (unless reRouteAlreadyGrouped)
+ * already-grouped tabs are exempt. Shared by the navigation-commit path and
+ * the backfill pass so both entry points enforce identical guard rails.
+ */
+async function routeSingleTab(
+  tabId: number,
+  rule: AutoRouteRule,
+  reRouteAlreadyGrouped: boolean,
+): Promise<boolean> {
   let tab: chrome.tabs.Tab;
   try {
-    tab = await chrome.tabs.get(details.tabId);
+    tab = await chrome.tabs.get(tabId);
   } catch {
-    return;
+    return false;
   }
-  if (tab.id === undefined) return;
-  if (tab.pinned) return;
-  if (tab.windowId === chrome.windows.WINDOW_ID_NONE) return;
+  if (tab.id === undefined) return false;
+  if (tab.pinned) return false;
+  if (tab.windowId === chrome.windows.WINDOW_ID_NONE) return false;
   const isGrouped = tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE;
-  if (isGrouped && !routing.reRouteAlreadyGrouped) return;
-
+  if (isGrouped && !reRouteAlreadyGrouped) return false;
   try {
     await attachTabToRuleGroup(tab.id, tab.windowId, rule);
   } catch (error) {
     if (!isBenignRuntimeError(error)) {
       console.warn('[tabdorm] auto-routing failed.', error);
     }
+    return false;
   }
+  return true;
 }
 
 async function attachTabToRuleGroup(
@@ -101,4 +115,26 @@ async function attachTabToRuleGroup(
     color: rule.groupColor,
     collapsed: rule.autoCollapse === true,
   });
+}
+
+/**
+ * Backfill pass: applies the enabled rules to already-open tabs so a newly
+ * added rule (or a fresh install/reload) groups the existing population
+ * immediately instead of waiting for each tab to navigate again.
+ */
+export async function backfillRouting(): Promise<{ routed: number }> {
+  const config = await getConfig();
+  const routing = config.groups.routing;
+  if (!routing.enabled || routing.rules.length === 0) return { routed: 0 };
+  const tabs = await chrome.tabs.query({});
+  let routed = 0;
+  for (const tab of tabs) {
+    const url = tab.url ?? '';
+    if (!/^https?:/i.test(url) || tab.id === undefined) continue;
+    const rule = matchRuleForUrl(url, routing.rules);
+    if (rule === null) continue;
+    const didRoute = await routeSingleTab(tab.id, rule, routing.reRouteAlreadyGrouped);
+    if (didRoute) routed += 1;
+  }
+  return { routed };
 }
