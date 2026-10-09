@@ -45,6 +45,15 @@
     const count = visible.length;
     get(virtualizer).setOptions({ count });
   });
+  let lastScrolledActiveId: number | null = null;
+  $effect(() => {
+    const activeIndex = visible.findIndex((r) => r.active);
+    if (activeIndex === -1) return;
+    const row = visible[activeIndex];
+    if (row === undefined || row.tabId === lastScrolledActiveId) return;
+    lastScrolledActiveId = row.tabId;
+    get(virtualizer).scrollToIndex(activeIndex, { align: 'auto' });
+  });
   const items = $derived($virtualizer.getVirtualItems());
   const total = $derived($virtualizer.getTotalSize());
 

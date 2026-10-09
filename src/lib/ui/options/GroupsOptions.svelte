@@ -73,8 +73,15 @@
   <p class="mt-1 text-xs text-faint">Auto-routing sorts tabs into native Chrome tab groups as you browse — rules are evaluated top to bottom.</p>
   <div class="mt-2 divide-y divide-line/60">
     <Toggle
+      checked={config.groups.collapseOnSwitch}
+      label="Collapse the previous group when you switch groups"
+      hint="Activating a tab outside its group folds that group back up."
+      onChange={(v) => onChange((d) => (d.groups.collapseOnSwitch = v))}
+    />
+    <Toggle
       checked={config.groups.suspendOnGroupCollapse}
       label="Suspend all tabs when a group collapses"
+      hint="Applies to every collapse source — automatic or your own manual collapse."
       onChange={(v) => onChange((d) => (d.groups.suspendOnGroupCollapse = v))}
     />
     <NumberField

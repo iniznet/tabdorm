@@ -32,6 +32,7 @@ export interface TabDormConfig {
   };
   groups: {
     suspendOnGroupCollapse: boolean;
+    collapseOnSwitch: boolean;
     autoCollapseOnIdleMinutes: number;
     routing: {
       enabled: boolean;

@@ -23,6 +23,7 @@ export const DEFAULT_TAB_DORM_CONFIG: TabDormConfig = {
   },
   groups: {
     suspendOnGroupCollapse: false,
+    collapseOnSwitch: false,
     autoCollapseOnIdleMinutes: 0,
     routing: {
       enabled: true,
@@ -141,6 +142,7 @@ export function resolveConfig(raw: unknown): TabDormConfig {
     },
     groups: {
       suspendOnGroupCollapse: readBool(g['suspendOnGroupCollapse'], DEFAULT_TAB_DORM_CONFIG.groups.suspendOnGroupCollapse),
+      collapseOnSwitch: readBool(g['collapseOnSwitch'], DEFAULT_TAB_DORM_CONFIG.groups.collapseOnSwitch),
       autoCollapseOnIdleMinutes: clampNumber(g['autoCollapseOnIdleMinutes'], DEFAULT_TAB_DORM_CONFIG.groups.autoCollapseOnIdleMinutes, b.autoCollapseOnIdleMinutes.min, b.autoCollapseOnIdleMinutes.max),
       routing: {
         enabled: readBool(r['enabled'], DEFAULT_TAB_DORM_CONFIG.groups.routing.enabled),

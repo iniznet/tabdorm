@@ -1,4 +1,5 @@
-import { registerSweepAlarmListener, runSweepOnce, syncSweepAlarm } from '@/core/suspension';
+import { runSweepOnce, syncSweepAlarm, SWEEP_ALARM } from '@/core/suspension';
+import { collapseIdleGroups, initGroupCollapse } from '@/core/group-collapse';
 import { ensureColdStartSeeded, forgetActivity, touchActivity } from '@/core/activity';
 import { updateAsleepBadge } from '@/core/badge';
 import { initContextMenus, suspendOtherTabs } from '@/core/context-menus';
@@ -30,7 +31,10 @@ export default defineBackground(() => {
   shadowTree.install();
   initIdleGuard();
   registerConfigInvalidation();
-  registerSweepAlarmListener();
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === SWEEP_ALARM) void sweepNow();
+  });
+  initGroupCollapse();
   registerSnapshotAlarmListener(shadowTree);
   registerActivityTracking();
   registerBackgroundMessageHandler((request) => handleMessage(request, shadowTree));
@@ -51,6 +55,14 @@ export default defineBackground(() => {
   });
   void bootstrap(shadowTree);
 });
+
+/** Sweep orchestration: suspension sweep, then idle-group collapse, then badge. */
+async function sweepNow(): Promise<ReturnType<typeof runSweepOnce>> {
+  const summary = await runSweepOnce();
+  await collapseIdleGroups();
+  await updateAsleepBadge();
+  return summary;
+}
 
 async function resyncAlarms(): Promise<void> {
   const config = await getConfig();
@@ -102,11 +114,8 @@ async function handleMessage(request: BackgroundRequest, shadowTree: ShadowTree)
   switch (request.type) {
     case 'snapshotNow':
       return saveUserSnapshot(shadowTree);
-    case 'runSweep': {
-      const summary = await runSweepOnce();
-      await updateAsleepBadge();
-      return summary;
-    }
+    case 'runSweep':
+      return sweepNow();
     case 'suspendTab': {
       const outcome = await discardTabSafe(request.tabId);
       await updateAsleepBadge();
