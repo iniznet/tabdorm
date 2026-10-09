@@ -77,8 +77,6 @@ npm run zip          # store-ready zip in .output/
 npx svelte-check     # Svelte diagnostics
 ```
 
-Behavioral probe suites for each milestone live in `tasks/step*-smoke-probes.ts` (run with `npx tsx`).
-
 ## License
 
 [GPL-3.0](LICENSE) — TabDorm is free software; version **3** of the GNU General Public License applies to all versions.
