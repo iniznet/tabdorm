@@ -1,3 +1,5 @@
+import { paintSleepIcon, restoreSleepIcon } from './sleep-icon';
+
 /** Chromium errors that are expected side effects of racing tab lifecycles. */
 const BENIGN_DISCARD_PATTERNS: readonly RegExp[] = [
   /Tabs cannot be edited right now/i,
@@ -29,10 +31,15 @@ export async function discardTabSafe(tabId: number): Promise<DiscardOutcome> {
   }
   if (tab.discarded) return 'already_discarded';
   if (tab.active) return 'skipped';
+  // The strip keeps whatever favicon the document last declared, so the mark must
+  // land before the discard; a discarded tab has no renderer to retry from.
+  const painted = (await paintSleepIcon(tabId)) === 'painted';
   try {
-    await chrome.tabs.discard(tabId);
+    const discarded = await chrome.tabs.discard(tabId);
+    if (painted && discarded?.discarded !== true) await restoreSleepIcon(tabId);
     return 'discarded';
   } catch (error) {
+    if (painted) await restoreSleepIcon(tabId);
     if (isBenignRuntimeError(error)) return 'skipped';
     console.warn(`[tabdorm] discard failed for tab ${tabId}.`, error);
     return 'failed';

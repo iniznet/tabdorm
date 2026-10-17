@@ -27,6 +27,12 @@ export interface TabDormConfig {
     memorySaverPolicy: 'cooperative' | 'exclusive' | 'custom_shield';
     /** Cooldown after waking from system sleep before any suspension may run. */
     wakeCooldownMs: number;
+    /**
+     * Paint a dim z over the page favicon before discarding, so Chrome's own tab
+     * strip shows the sleep state. Needs the optional scripting grant; without it
+     * the mark is skipped and suspension behaves exactly as before.
+     */
+    stripSleepIcon: boolean;
     exemptions: {
       pinnedTabs: boolean;
       audibleTabs: boolean;

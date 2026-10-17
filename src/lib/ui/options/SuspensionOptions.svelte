@@ -17,6 +17,7 @@
   let patternError = $state('');
   let titleDraft = $state('');
   let formGuardNote = $state('');
+  let stripIconNote = $state('');
 
   /**
    * Draft protection needs an optional host permission — the content script that
@@ -34,6 +35,24 @@
       return;
     }
     onChange((d) => (d.suspension.exemptions.unsavedForms = true));
+  }
+
+  /**
+   * The tab-strip mark needs the same optional broad grant: Chrome's strip mirrors
+   * the page favicon, and no API paints the strip itself.
+   */
+  async function toggleStripIcon(next: boolean): Promise<void> {
+    stripIconNote = '';
+    if (!next) {
+      onChange((d) => (d.suspension.stripSleepIcon = false));
+      return;
+    }
+    const granted = await chrome.permissions.request({ permissions: ['scripting'], origins: ['<all_urls>'] });
+    if (!granted) {
+      stripIconNote = 'Permission not granted — the tab strip stays exactly as Chrome draws it.';
+      return;
+    }
+    onChange((d) => (d.suspension.stripSleepIcon = true));
   }
 
   const POLICY_OPTIONS = [
@@ -131,6 +150,16 @@
       suffix="s"
       onChange={(v) => onChange((d) => (d.suspension.wakeCooldownMs = v * 1000))}
     />
+
+    <Toggle
+      checked={config.suspension.stripSleepIcon}
+      label="Sleep mark in the tab strip"
+      hint="Chrome's strip cannot be styled, but it mirrors the page favicon: a sleeping tab swaps in a dim z. Asks for broad page access; stays off without the grant."
+      onChange={(v) => void toggleStripIcon(v)}
+    />
+    {#if stripIconNote !== ''}
+      <p class="py-1.5 text-[12px] text-warn" role="status">{stripIconNote}</p>
+    {/if}
 
     <div class="py-2.5">
       <p class="text-[13px] font-medium text-ink">Exemptions</p>
