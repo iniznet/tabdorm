@@ -1,6 +1,7 @@
 <script lang="ts">
   import Toggle from '@/lib/ui/controls/Toggle.svelte';
   import NumberField from '@/lib/ui/controls/NumberField.svelte';
+  import Icon from '@/lib/ui/Icon.svelte';
   import { ruleToRegExp } from '@/core/auto-route';
   import { VALID_GROUP_COLORS, type AutoRouteRule, type GroupColor, type TabDormConfig } from '@/types';
 
@@ -68,10 +69,10 @@
   }
 </script>
 
-<section id="groups" class="scroll-mt-6 rounded-xl border border-line bg-raised p-5">
-  <h2 class="text-xs font-semibold uppercase tracking-wider text-dim">Tab groups</h2>
-  <p class="mt-1 text-xs text-faint">Auto-routing sorts tabs into native Chrome tab groups as you browse — rules are evaluated top to bottom.</p>
-  <div class="mt-2 divide-y divide-line/60">
+<section id="groups" class="scroll-mt-20 border-t border-line pt-5">
+  <h2 class="text-[15px] font-semibold text-ink">Tab groups</h2>
+  <p class="mt-1 text-[12px] text-dim">Auto-routing sorts tabs into native Chrome tab groups as you browse — rules are evaluated top to bottom.</p>
+  <div class="mt-3 divide-y divide-line/70">
     <Toggle
       checked={config.groups.collapseOnSwitch}
       label="Collapse the previous group when you switch groups"
@@ -128,12 +129,12 @@
 
     <div class="py-2.5">
       <div class="flex items-center justify-between">
-        <p class="text-sm text-ink">Routing rules <span class="text-faint">({config.groups.routing.rules.length})</span></p>
+        <p class="text-[13px] text-ink">Routing rules <span class="text-dim">({config.groups.routing.rules.length})</span></p>
       </div>
 
       <ul class="mt-2 flex flex-col gap-2">
         {#each config.groups.routing.rules as rule, index (rule.id)}
-          <li class="rounded-lg border border-line bg-overlay p-2.5">
+          <li class="rounded-[10px] border border-line bg-overlay p-2.5">
             <div class="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -143,40 +144,40 @@
                 onchange={(e) => patchRule(rule.id, { enabled: e.currentTarget.checked })}
               />
               <input
-                class="min-w-0 flex-1 rounded-md border border-line bg-raised px-2 py-1 text-xs text-ink font-mono placeholder:text-faint"
+                class="min-w-0 flex-1 rounded-md border border-line bg-overlay px-2 py-1 text-[12px] text-ink font-mono placeholder:text-dim"
                 value={rule.pattern}
                 placeholder="*.example.com/*"
                 onchange={(e) => patchRule(rule.id, { pattern: e.currentTarget.value.trim() })}
               />
               <span class="flex shrink-0 gap-0.5">
                 <button
-                  class="grid h-6 w-6 place-items-center rounded text-faint hover:bg-line hover:text-ink disabled:opacity-30"
+                  class="grid h-6 w-6 place-items-center rounded text-dim hover:bg-overlay hover:text-ink disabled:opacity-30"
                   aria-label="Move rule up"
                   disabled={index === 0}
                   onclick={() => moveRule(rule.id, -1)}>↑</button
                 >
                 <button
-                  class="grid h-6 w-6 place-items-center rounded text-faint hover:bg-line hover:text-ink disabled:opacity-30"
+                  class="grid h-6 w-6 place-items-center rounded text-dim hover:bg-overlay hover:text-ink disabled:opacity-30"
                   aria-label="Move rule down"
                   disabled={index === config.groups.routing.rules.length - 1}
                   onclick={() => moveRule(rule.id, 1)}>↓</button
                 >
                 <button
-                  class="grid h-6 w-6 place-items-center rounded text-bad hover:bg-line"
+                  class="grid h-6 w-6 place-items-center rounded text-bad hover:bg-overlay"
                   aria-label="Delete rule"
-                  onclick={() => removeRule(rule.id)}>✕</button
+                  onclick={() => removeRule(rule.id)}><Icon name="close" size={12} /></button
                 >
               </span>
             </div>
             <div class="mt-2 flex items-center gap-2">
               <input
-                class="min-w-0 flex-1 rounded-md border border-line bg-raised px-2 py-1 text-xs text-ink placeholder:text-faint"
+                class="min-w-0 flex-1 rounded-md border border-line bg-overlay px-2 py-1 text-[12px] text-ink placeholder:text-dim"
                 value={rule.groupTitle}
                 placeholder="Group title"
                 onchange={(e) => patchRule(rule.id, { groupTitle: e.currentTarget.value.trim() })}
               />
               <select
-                class="shrink-0 rounded-md border border-line bg-raised px-1.5 py-1 text-xs capitalize text-ink"
+                class="shrink-0 rounded-md border border-line bg-raised px-1.5 py-1 text-[12px] capitalize text-ink"
                 value={rule.groupColor}
                 aria-label="Group color"
                 onchange={(e) => patchRule(rule.id, { groupColor: e.currentTarget.value as GroupColor })}
@@ -185,7 +186,7 @@
                   <option value={color}>{color}</option>
                 {/each}
               </select>
-              <label class="flex shrink-0 items-center gap-1 text-xs text-dim">
+              <label class="flex shrink-0 items-center gap-1 text-[12px] text-dim">
                 <input
                   type="checkbox"
                   checked={rule.autoCollapse === true}
@@ -196,29 +197,29 @@
               </label>
             </div>
             {#if ruleToRegExp(rule.pattern) === null}
-              <p class="mt-1 text-xs text-bad">Invalid pattern — this rule matches nothing until fixed.</p>
+              <p class="mt-1 text-[12px] text-bad">Invalid pattern — this rule matches nothing until fixed.</p>
             {/if}
           </li>
         {/each}
       </ul>
 
-      <div class="mt-3 rounded-lg border border-dashed border-line p-2.5">
-        <p class="text-xs font-medium text-dim">Add rule</p>
+      <div class="mt-3 rounded-[10px] border border-dashed border-line-strong p-2.5">
+        <p class="text-[12px] font-medium text-dim">Add rule</p>
         <div class="mt-2 flex items-center gap-2">
           <input
-            class="min-w-0 flex-[2] rounded-md border border-line bg-raised px-2 py-1 text-xs font-mono text-ink placeholder:text-faint"
+            class="min-w-0 flex-[2] rounded-md border border-line bg-overlay px-2 py-1 text-[12px] font-mono text-ink placeholder:text-dim"
             placeholder="*.github.com/*"
             bind:value={newPattern}
           />
           <input
-            class="min-w-0 flex-1 rounded-md border border-line bg-raised px-2 py-1 text-xs text-ink placeholder:text-faint"
+            class="min-w-0 flex-1 rounded-md border border-line bg-overlay px-2 py-1 text-[12px] text-ink placeholder:text-dim"
             placeholder="Group title"
             bind:value={newTitle}
           />
         </div>
         <div class="mt-2 flex items-center gap-2">
           <select
-            class="rounded-md border border-line bg-raised px-1.5 py-1 text-xs capitalize text-ink"
+            class="rounded-md border border-line bg-raised px-1.5 py-1 text-[12px] capitalize text-ink"
             bind:value={newColor}
             aria-label="New rule color"
           >
@@ -226,16 +227,16 @@
               <option value={color}>{color}</option>
             {/each}
           </select>
-          <label class="flex items-center gap-1 text-xs text-dim">
+          <label class="flex items-center gap-1 text-[12px] text-dim">
             <input type="checkbox" bind:checked={newAutoCollapse} class="h-3.5 w-3.5 accent-[var(--color-accent)]" />
             auto-collapse
           </label>
           <button
-            class="ml-auto rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent-strong"
+            class="ml-auto rounded-md bg-awake px-3 py-1 text-[12px] font-medium text-on-awake hover:bg-accent-strong"
             onclick={addRule}>Add rule</button
           >
         </div>
-        {#if addError !== ''}<p class="mt-1 text-xs text-bad">{addError}</p>{/if}
+        {#if addError !== ''}<p class="mt-1 text-[12px] text-bad">{addError}</p>{/if}
       </div>
     </div>
   </div>

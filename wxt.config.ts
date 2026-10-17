@@ -11,6 +11,20 @@ export default defineConfig({
     name: 'TabDorm',
     description:
       'Native tab suspension, tab-group auto-routing, and fast session snapshots. No placeholder pages.',
+    // PNGs generated from src/assets/brand/tabdorm-mark.svg by `npm run icons`.
+    icons: {
+      16: 'icon/16.png',
+      32: 'icon/32.png',
+      48: 'icon/48.png',
+      128: 'icon/128.png',
+    },
+    action: {
+      default_icon: {
+        16: 'icon/16.png',
+        32: 'icon/32.png',
+      },
+      default_title: 'TabDorm',
+    },
     permissions: [
       'tabs',
       'tabGroups',

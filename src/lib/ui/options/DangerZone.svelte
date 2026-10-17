@@ -72,15 +72,15 @@
     note = `Deleted ${removed} session(s).`;
   }
 
-  const BTN_DANGER = 'rounded-md border border-bad/50 px-3 py-1.5 text-xs font-medium text-bad hover:bg-bad/10';
-  const BTN_NEUTRAL = 'rounded-md border border-line px-3 py-1.5 text-xs font-medium text-dim hover:border-faint hover:text-ink';
+  const BTN_DANGER = 'rounded-md border border-bad/50 px-3 py-1.5 text-[12px] font-medium text-bad hover:bg-bad/10';
+  const BTN_NEUTRAL = 'rounded-md border border-line px-3 py-1.5 text-[12px] font-medium text-dim hover:border-faint hover:text-ink';
 </script>
 
 <div class="divide-y divide-line/60">
   <div class="flex items-center justify-between gap-3 py-2.5">
     <span class="min-w-0">
-      <span class="block text-sm text-ink">Config file</span>
-      <span class="mt-0.5 block text-xs text-faint">Export all settings as JSON, or import a previously exported file.</span>
+      <span class="block text-[13px] text-ink">Config file</span>
+      <span class="mt-0.5 block text-[12px] text-dim">Export all settings as JSON, or import a previously exported file.</span>
     </span>
     <span class="flex shrink-0 gap-2">
       <button class={BTN_NEUTRAL} onclick={exportConfig}>Export</button>
@@ -100,25 +100,25 @@
 
   <div class="flex items-center justify-between gap-3 py-2.5">
     <span class="min-w-0">
-      <span class="block text-sm text-ink">Reset settings</span>
-      <span class="mt-0.5 block text-xs text-faint">Restore every knob to its safe default. Sessions are kept.</span>
+      <span class="block text-[13px] text-ink">Reset settings</span>
+      <span class="mt-0.5 block text-[12px] text-dim">Restore every knob to its safe default. Sessions are kept.</span>
     </span>
     <button class={BTN_DANGER} onclick={() => void resetConfig()}>Reset</button>
   </div>
 
   <div class="flex items-center justify-between gap-3 py-2.5">
     <span class="min-w-0">
-      <span class="block text-sm text-ink">Clear session history</span>
-      <span class="mt-0.5 block text-xs text-faint">Deletes all snapshots, saved sessions, and closed-window records.</span>
+      <span class="block text-[13px] text-ink">Clear session history</span>
+      <span class="mt-0.5 block text-[12px] text-dim">Deletes all snapshots, saved sessions, and closed-window records.</span>
     </span>
     <button class={BTN_DANGER} onclick={() => void clearHistory()}>Clear</button>
   </div>
 
   {#if storageNote !== null}
-    <p class="py-2.5 text-xs text-faint">{storageNote}</p>
+    <p class="py-2.5 text-[12px] text-dim">{storageNote}</p>
   {/if}
 
   {#if note !== ''}
-    <p class="py-2.5 text-xs text-dim" role="status">{note}</p>
+    <p class="py-2.5 text-[12px] text-dim" role="status">{note}</p>
   {/if}
 </div>

@@ -11,10 +11,10 @@
   let { config, onChange }: Props = $props();
 </script>
 
-<section id="snapshots" class="scroll-mt-6 rounded-xl border border-line bg-raised p-5">
-  <h2 class="text-xs font-semibold uppercase tracking-wider text-dim">Snapshots</h2>
-  <p class="mt-1 text-xs text-faint">Automatic snapshots deduplicate — an unchanged browser state never piles up history. User-saved and closed-window sessions are never auto-deleted.</p>
-  <div class="mt-2 divide-y divide-line/60">
+<section id="snapshots" class="scroll-mt-20 border-t border-line pt-5">
+  <h2 class="text-[15px] font-semibold text-ink">Snapshots</h2>
+  <p class="mt-1 text-[12px] text-dim">Automatic snapshots deduplicate — an unchanged browser state never piles up history. User-saved and closed-window sessions are never auto-deleted.</p>
+  <div class="mt-3 divide-y divide-line/70">
     <Toggle
       checked={config.snapshots.enabled}
       label="Enable automatic snapshots"

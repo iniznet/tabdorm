@@ -1,6 +1,6 @@
 import type { GroupColor, TabDormConfig } from '@/types';
 import { getLastActivity, isWakeCooldownActive } from './activity';
-import { ruleToRegExp } from './auto-route';
+import { matchesUrlPattern } from './auto-route';
 import { getConfig } from './config-store';
 import { discardTabSafe } from './discard';
 import { safeTabUrl } from './sanitize';
@@ -67,7 +67,7 @@ export function evaluateSuspension(input: SuspensionInput): SuspensionVerdict {
   if (input.groupTitle !== undefined && input.exemptions.protectedGroupTitles.includes(input.groupTitle)) {
     return { action: 'shield', reason: 'protected_group_title' };
   }
-  if (matchesWhitelist(input.url, input.exemptions.urlPatterns)) {
+  if (matchesUrlPattern(input.url, input.exemptions.urlPatterns)) {
     return { action: 'shield', reason: 'url_whitelisted' };
   }
   if (input.now - input.lastActivityAt >= input.idleThresholdMs) {
@@ -76,13 +76,6 @@ export function evaluateSuspension(input: SuspensionInput): SuspensionVerdict {
   return { action: 'unshield', reason: 'not_idle' };
 }
 
-function matchesWhitelist(url: string, patterns: readonly string[]): boolean {
-  for (const pattern of patterns) {
-    const matcher = ruleToRegExp(pattern);
-    if (matcher !== null && matcher.test(url)) return true;
-  }
-  return false;
-}
 
 export interface SweepSummary {
   status: 'ran' | 'disabled' | 'cooldown';

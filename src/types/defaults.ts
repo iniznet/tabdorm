@@ -47,7 +47,7 @@ export const DEFAULT_TAB_DORM_CONFIG: TabDormConfig = {
     restoreSettleMs: 300,
   },
   stale: {
-    staleAfterDays: 7,
+    staleAfterHours: 168,
   },
   restoration: {
     batchSize: 10,
@@ -79,7 +79,7 @@ const NUMERIC_BOUNDS = {
   maxSnapshotsRetained: { min: 1, max: 10_000 },
   retentionDays: { min: 1, max: 3_650 },
   autoBackupDownloadDays: { min: 0, max: 365 },
-  staleAfterDays: { min: 0, max: 365 },
+  staleAfterHours: { min: 0, max: 8760 },
 } as const;
 
 function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
@@ -197,7 +197,7 @@ export function resolveConfig(raw: unknown): TabDormConfig {
       restoreSettleMs: clampNumber(focus['restoreSettleMs'], DEFAULT_TAB_DORM_CONFIG.focus.restoreSettleMs, b.restoreSettleMs.min, b.restoreSettleMs.max),
     },
     stale: {
-      staleAfterDays: clampNumber(st['staleAfterDays'], DEFAULT_TAB_DORM_CONFIG.stale.staleAfterDays, b.staleAfterDays.min, b.staleAfterDays.max),
+      staleAfterHours: clampNumber(st['staleAfterHours'], DEFAULT_TAB_DORM_CONFIG.stale.staleAfterHours, b.staleAfterHours.min, b.staleAfterHours.max),
     },
     restoration: {
       batchSize: clampNumber(rest['batchSize'], DEFAULT_TAB_DORM_CONFIG.restoration.batchSize, b.batchSize.min, b.batchSize.max),

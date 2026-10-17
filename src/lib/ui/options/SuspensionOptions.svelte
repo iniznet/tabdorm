@@ -2,6 +2,7 @@
   import Toggle from '@/lib/ui/controls/Toggle.svelte';
   import NumberField from '@/lib/ui/controls/NumberField.svelte';
   import SelectField from '@/lib/ui/controls/SelectField.svelte';
+  import Icon from '@/lib/ui/Icon.svelte';
   import { ruleToRegExp } from '@/core/auto-route';
   import { VALID_GROUP_COLORS, type TabDormConfig } from '@/types';
 
@@ -86,10 +87,10 @@
   }
 </script>
 
-<section id="suspension" class="scroll-mt-6 rounded-xl border border-line bg-raised p-5">
-  <h2 class="text-xs font-semibold uppercase tracking-wider text-dim">Suspension</h2>
-  <p class="mt-1 text-xs text-faint">Native tab discarding — sleeping tabs keep their slot, title, and favicon while Chrome frees their memory.</p>
-  <div class="mt-2 divide-y divide-line/60">
+<section id="suspension" class="scroll-mt-20 border-t border-line pt-5">
+  <h2 class="text-[15px] font-semibold text-ink">Suspension</h2>
+  <p class="mt-1 text-[12px] text-dim">Native tab discarding — sleeping tabs keep their slot, title, and favicon while Chrome frees their memory.</p>
+  <div class="mt-3 divide-y divide-line/70">
     <Toggle
       checked={config.suspension.enabled}
       label="Enable automatic suspension"
@@ -132,7 +133,7 @@
     />
 
     <div class="py-2.5">
-      <p class="text-sm font-medium text-ink">Exemptions</p>
+      <p class="text-[13px] font-medium text-ink">Exemptions</p>
       <div class="mt-1 divide-y divide-line/40">
         <Toggle
           checked={config.suspension.exemptions.pinnedTabs}
@@ -156,7 +157,7 @@
           onChange={(v) => void toggleUnsavedForms(v)}
         />
         {#if formGuardNote !== ''}
-          <p class="py-1.5 text-xs text-warn" role="status">{formGuardNote}</p>
+          <p class="py-1.5 text-[12px] text-warn" role="status">{formGuardNote}</p>
         {/if}
         <Toggle
           checked={config.suspension.exemptions.onBattery}
@@ -168,11 +169,11 @@
     </div>
 
     <div class="py-2.5">
-      <p class="text-sm text-ink">URL whitelist</p>
-      <p class="mt-0.5 text-xs text-faint">Match-pattern-lite wildcards, e.g. "*.github.com/*" — or "regexp:" followed by a raw regex. Whitelisted URLs are never auto-suspended.</p>
+      <p class="text-[13px] text-ink">URL whitelist</p>
+      <p class="mt-0.5 text-[12px] text-dim">Match-pattern-lite wildcards, e.g. "*.github.com/*" — or "regexp:" followed by a raw regex. Whitelisted URLs are never auto-suspended.</p>
       <div class="mt-2 flex gap-2">
         <input
-          class="min-w-0 flex-1 rounded-md border border-line bg-overlay px-2 py-1 text-xs text-ink placeholder:text-faint"
+          class="min-w-0 flex-1 rounded-md border border-line bg-overlay px-2 py-1 text-[12px] text-ink placeholder:text-dim"
           placeholder="*.example.com/*"
           bind:value={patternDraft}
           onkeydown={(e) => {
@@ -180,20 +181,20 @@
           }}
         />
         <button
-          class="shrink-0 rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent-strong"
+          class="shrink-0 rounded-md bg-awake px-3 py-1 text-[12px] font-medium text-on-awake hover:bg-accent-strong"
           onclick={addPattern}>Add</button
         >
       </div>
-      {#if patternError !== ''}<p class="mt-1 text-xs text-bad">{patternError}</p>{/if}
+      {#if patternError !== ''}<p class="mt-1 text-[12px] text-bad">{patternError}</p>{/if}
       {#if config.suspension.exemptions.urlPatterns.length > 0}
         <ul class="mt-2 flex flex-col gap-1">
           {#each config.suspension.exemptions.urlPatterns as pattern (pattern)}
             <li class="flex items-center gap-2 rounded-md bg-overlay px-2 py-1">
-              <code class="min-w-0 flex-1 truncate text-xs text-dim">{pattern}</code>
+              <code class="min-w-0 flex-1 truncate text-[12px] text-dim">{pattern}</code>
               <button
-                class="shrink-0 rounded px-1.5 text-xs text-bad hover:bg-line"
+                class="shrink-0 rounded px-1.5 text-[12px] text-bad hover:bg-overlay"
                 aria-label="Remove pattern {pattern}"
-                onclick={() => removePattern(pattern)}>✕</button
+                onclick={() => removePattern(pattern)}><Icon name="close" size={12} /></button
               >
             </li>
           {/each}
@@ -202,14 +203,14 @@
     </div>
 
     <div class="py-2.5">
-      <p class="text-sm text-ink">Protected group colors</p>
-      <p class="mt-0.5 text-xs text-faint">Tabs inside groups with these colors are never auto-suspended.</p>
+      <p class="text-[13px] text-ink">Protected group colors</p>
+      <p class="mt-0.5 text-[12px] text-dim">Tabs inside groups with these colors are never auto-suspended.</p>
       <div class="mt-2 flex flex-wrap gap-1.5">
         {#each VALID_GROUP_COLORS as color (color)}
           <button
-            class="rounded-full border px-2.5 py-1 text-xs capitalize {config.suspension.exemptions.protectedGroupColors.includes(color)
+            class="rounded-full border px-2.5 py-1 text-[12px] capitalize {config.suspension.exemptions.protectedGroupColors.includes(color)
               ? 'border-accent bg-accent/15 text-ink'
-              : 'border-line text-faint hover:border-faint'}"
+              : 'border-line text-dim hover:border-faint'}"
             aria-pressed={config.suspension.exemptions.protectedGroupColors.includes(color)}
             onclick={() => toggleGroupColor(color)}>{color}</button
           >
@@ -218,10 +219,10 @@
     </div>
 
     <div class="py-2.5">
-      <p class="text-sm text-ink">Protected group titles</p>
+      <p class="text-[13px] text-ink">Protected group titles</p>
       <div class="mt-2 flex gap-2">
         <input
-          class="min-w-0 flex-1 rounded-md border border-line bg-overlay px-2 py-1 text-xs text-ink placeholder:text-faint"
+          class="min-w-0 flex-1 rounded-md border border-line bg-overlay px-2 py-1 text-[12px] text-ink placeholder:text-dim"
           placeholder="Work"
           bind:value={titleDraft}
           onkeydown={(e) => {
@@ -229,14 +230,14 @@
           }}
         />
         <button
-          class="shrink-0 rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent-strong"
+          class="shrink-0 rounded-md bg-awake px-3 py-1 text-[12px] font-medium text-on-awake hover:bg-accent-strong"
           onclick={addTitle}>Add</button
         >
       </div>
       {#if config.suspension.exemptions.protectedGroupTitles.length > 0}
         <ul class="mt-2 flex flex-wrap gap-1.5">
           {#each config.suspension.exemptions.protectedGroupTitles as title (title)}
-            <li class="flex items-center gap-1 rounded-full bg-overlay px-2.5 py-1 text-xs text-dim">
+            <li class="flex items-center gap-1 rounded-full bg-overlay px-2.5 py-1 text-[12px] text-dim">
               {title}
               <button
                 class="text-bad hover:text-ink"
@@ -245,7 +246,7 @@
                   onChange((draft) => {
                     draft.suspension.exemptions.protectedGroupTitles =
                       draft.suspension.exemptions.protectedGroupTitles.filter((t) => t !== title);
-                  })}>✕</button
+                  })}><Icon name="close" size={12} /></button
               >
             </li>
           {/each}

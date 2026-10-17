@@ -1,7 +1,7 @@
 import { runSweepOnce, syncSweepAlarm, SWEEP_ALARM } from '@/core/suspension';
 import { collapseIdleGroups, initGroupCollapse } from '@/core/group-collapse';
 import { initCloseFocus } from '@/core/close-focus-tabs';
-import { initTabStats, pruneTabStats } from '@/core/tab-stats';
+import { initTabStats, pruneTabStats, seedTabStats } from '@/core/tab-stats';
 import { ensureColdStartSeeded, forgetActivity, touchActivity } from '@/core/activity';
 import { updateAsleepBadge } from '@/core/badge';
 import { initContextMenus, suspendOtherTabs, toggleWhitelistForTab } from '@/core/context-menus';
@@ -92,6 +92,8 @@ async function bootstrap(shadowTree: ShadowTree): Promise<void> {
   void initDatabase();
   await shadowTree.init();
   await pruneTabStats();
+  // Tabs opened before this build have no record; Chrome's lastAccessed seeds them.
+  await seedTabStats().catch(() => 0);
   void updateAsleepBadge();
   void backfillRouting();
 }

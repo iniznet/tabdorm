@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="TabDorm">
+  <title>TabDorm</title>
+  <!--
+    Single-colour mark: the crescent is cut out, so whatever sits behind shows
+    through. Use inline with the color property set (fill is currentColor), or hard-code the
+    fill for a raster export.
+  -->
+  <defs>
+    <mask id="td-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+      <rect width="24" height="24" fill="#fff"/>
+      <circle cx="11.6" cy="12.4" r="5.9" fill="#000"/>
+      <circle cx="14" cy="10.9" r="5.15" fill="#fff"/>
+    </mask>
+  </defs>
+  <path d="M3.2 20.8V8.4a5.2 5.2 0 0 1 5.2-5.2h7.2a5.2 5.2 0 0 1 5.2 5.2V20.8Z" fill="currentColor" mask="url(#td-cut)"/>
+</svg>

@@ -65,8 +65,8 @@ export interface TabDormConfig {
     restoreSettleMs: number;
   };
   stale: {
-    /** Days without a visit before a tab is flagged stale; 0 disables flagging. */
-    staleAfterDays: number;
+    /** Hours without a visit before a tab is flagged stale; 0 disables flagging. */
+    staleAfterHours: number;
   };
   restoration: {
     batchSize: number;

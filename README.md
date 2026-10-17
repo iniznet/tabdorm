@@ -8,6 +8,7 @@ TabDorm is an open-source Chromium (Manifest V3) extension that frees memory by 
 
 - **Native suspension** — no fake `suspended.html` redirect pages. Asleep tabs are real Chromium discarded tabs; clicking one reloads the original page instantly.
 - **Automatic idle sweeping** — configurable idle threshold and sweep interval, with exemptions for pinned, audible, active-in-other-window tabs, URL whitelists, and protected group colors/titles.
+- **Sleep-state indicators** — every tab in the side panel says where it is in its sleep cycle: focused, awake with a live "sleeps in 12 min" countdown, due to sleep, asleep (`zzz`), or protected (whitelisted, pinned, audible, shielded).
 - **Manual controls everywhere** — popup button, per-tab actions in the side panel, tab right-click menu (*Suspend this tab / Suspend other tabs / Never suspend this site*), and a keyboard shortcut (`Ctrl+Shift+S`).
 - **Sleep Avalanche Guard** — after system wake, a cooldown plus an activity-clock reset prevents clock-jump mass discards.
 - **Domain auto-routing** — wildcard/regex rules cluster tabs into native tab groups as you browse, with per-rule auto-collapse.
