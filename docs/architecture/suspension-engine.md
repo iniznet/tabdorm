@@ -30,6 +30,25 @@ The two opt-in guards: **unsaved form input** comes from a tiny runtime-register
 
 `shield` does not just skip suspension — it sets `autoDiscardable: false` on the tab so **Chrome’s own Memory Saver** is also forbidden from killing it. The `memorySaverPolicy` knob controls this globally (`cooperative` = only shielded tabs are protected; `exclusive` = shield everything).
 
+## Sleep-state indicators
+
+Chrome's tab strip cannot be decorated: `chrome.tabs` exposes no title or favicon rewrite, a discarded tab runs no
+renderer, and TabDorm refuses placeholder pages. The indicator therefore lives in TabDorm's own lists, where tabs
+are actually managed. `classifyTabState()` in `src/core/tab-state.ts` is the single, pure classifier every
+surface renders from — it explains the sweep's inputs, and never discards, closes, or writes anything.
+
+| State | Condition | Indicator |
+| --- | --- | --- |
+| `active` | The focused tab | `sun`, amber, "focused" |
+| `awake` | Idle clock known, threshold not reached | `moon`, faint, "sleeps in 12 min" |
+| `due` | Idle clock past the threshold, sweep not yet run | `moon`, rust, "due to sleep" |
+| `asleep` | Natively discarded | `zzz`, moonlight teal, "asleep" |
+| `protected` | Whitelisted URL, `autoDiscardable: false`, or a pinned/audible exemption | `shield`, green, reason label |
+
+Unknown clocks (a browser run before cold-start seeding) read as `awake` with no countdown — never as `asleep`.
+The toolbar action title reports both counts ("TabDorm — N of M tabs asleep"), so the state reads without a panel.
+Countdowns refresh every 30 s while a panel is open; that tick is a display cadence, not a suspension rule.
+
 ## Sweep lifecycle
 
 1. A `chrome.alarms` timer fires every `sweepIntervalMinutes` (default 1 min; the alarm is resynced automatically whenever the config changes).

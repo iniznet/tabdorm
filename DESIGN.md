@@ -54,7 +54,7 @@ Elevation is declared once per element: hairlines for structure, one soft shadow
 
 ## Iconography
 
-`src/lib/ui/Icon.svelte`: authored inline SVG, 16 px grid, 1.5 stroke, round caps and joins, `currentColor`. Emoji are banned as icons. Available names: `moon`, `sun`, `pin`, `speaker`, `clock`, `camera`, `close`, `search`, `chevron`, `trash`, `plus`, `check`, `alert`, `external`, `download`, `upload`, `refresh`, `layers`, `flask` (test action), `shield`.
+`src/lib/ui/Icon.svelte`: authored inline SVG, 16 px grid, 1.5 stroke, round caps and joins, `currentColor`. Emoji are banned as icons. Available names: `moon`, `sun`, `pin`, `speaker`, `clock`, `camera`, `close`, `search`, `chevron`, `trash`, `plus`, `check`, `alert`, `external`, `download`, `upload`, `refresh`, `layers`, `flask` (test action), `shield`, `zzz` (sleep indicator).
 
 ## Browser surfaces
 

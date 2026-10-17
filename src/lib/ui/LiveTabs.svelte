@@ -2,7 +2,10 @@
   import { createVirtualizer } from '@tanstack/svelte-virtual';
   import { get } from 'svelte/store';
   import { onMount } from 'svelte';
+  import { getActivitySnapshot } from '@/core/activity';
+  import { matchesUrlPattern } from '@/core/auto-route';
   import { sendToBackground } from '@/core/messaging';
+  import { classifyTabState, SLEEP_CLOCK_TICK_MS, type TabState, type TabStateKind } from '@/core/tab-state';
   import { hostnamePattern } from '@/core/whitelist';
   import { getConfig, saveConfig } from '@/core/config-store';
   import Icon from '@/lib/ui/Icon.svelte';
@@ -13,7 +16,10 @@
     url: string;
     active: boolean;
     pinned: boolean;
+    audible: boolean;
     discarded: boolean;
+    /** false when a shield (autoDiscardable off) forbids discarding this tab. */
+    autoDiscardable: boolean;
     groupId: number;
   }
 
@@ -40,7 +46,13 @@
   let filter = $state('');
   let scrollEl: HTMLDivElement | undefined = $state();
   let suspendingId: number | null = $state(null);
-  let whitelistedHosts: string[] = $state([]);
+  let whitelistPatterns: string[] = $state([]);
+  let thresholdMs: number = $state(0);
+  let pinnedExempt: boolean = $state(true);
+  let audibleExempt: boolean = $state(true);
+  /** Per-tab idle clocks from storage.session; unknown ids fall back to "awake". */
+  let activity: Record<string, number> = $state({});
+  let now: number = $state(Date.now());
 
   const filtered = $derived(
     filter.trim() === ''
@@ -114,6 +126,10 @@
 
   onMount(() => {
     void refresh();
+    // Countdowns stay honest while the panel is open; the tick is display-only.
+    const tick = setInterval(() => {
+      now = Date.now();
+    }, SLEEP_CLOCK_TICK_MS);
     const onChange = () => void refresh();
     chrome.tabs.onUpdated.addListener(onChange);
     chrome.tabs.onRemoved.addListener(onChange);
@@ -122,6 +138,7 @@
     chrome.tabGroups.onCreated?.addListener(onChange);
     chrome.tabGroups.onRemoved?.addListener(onChange);
     return () => {
+      clearInterval(tick);
       chrome.tabs.onUpdated.removeListener(onChange);
       chrome.tabs.onRemoved.removeListener(onChange);
       chrome.tabs.onCreated.removeListener(onChange);
@@ -134,9 +151,15 @@
   async function refresh(): Promise<void> {
     const win = await chrome.windows.getLastFocused();
     if (win.id === undefined) return;
-    const [tabs, tabGroups] = await Promise.all([
+    const [tabs, tabGroups, config, activityMap] = await Promise.all([
       chrome.tabs.query({ windowId: win.id }),
       chrome.tabGroups.query({ windowId: win.id }),
+      getConfig(),
+      // A failed clock read degrades every row to "awake"; it never blanks the list.
+      getActivitySnapshot().catch((error: unknown) => {
+        console.warn('[tabdorm] activity snapshot unavailable.', error);
+        return {} as Record<string, number>;
+      }),
     ]);
     const nextGroups = new Map<number, GroupMeta>();
     // tabGroups.query returns groups in browser strip order; that order is the index.
@@ -152,12 +175,18 @@
         url: t.url ?? t.pendingUrl ?? '',
         active: t.active === true,
         pinned: t.pinned === true,
+        audible: t.audible === true,
         discarded: t.discarded === true,
+        autoDiscardable: t.autoDiscardable !== false,
         groupId: t.groupId === undefined ? GROUP_NONE : t.groupId,
       }));
     onStats?.(rows.length, rows.filter((r) => r.discarded).length);
-    const config = await getConfig();
-    whitelistedHosts = config.suspension.exemptions.urlPatterns;
+    now = Date.now();
+    activity = activityMap;
+    whitelistPatterns = config.suspension.exemptions.urlPatterns;
+    thresholdMs = config.suspension.idleThresholdMinutes * 60_000;
+    pinnedExempt = config.suspension.exemptions.pinnedTabs;
+    audibleExempt = config.suspension.exemptions.audibleTabs;
   }
 
   async function suspend(tabId: number): Promise<void> {
@@ -196,18 +225,51 @@
   /** Adds the tab's hostname to the suspension whitelist (idempotent). */
   async function whitelist(tab: LiveRow): Promise<void> {
     const pattern = hostnamePattern(tab.url);
-    if (pattern === null || whitelistedHosts.includes(pattern)) return;
+    if (pattern === null || whitelistPatterns.includes(pattern)) return;
     const config = await getConfig();
     const draft = structuredClone(config);
     draft.suspension.exemptions.urlPatterns = [...draft.suspension.exemptions.urlPatterns, pattern];
     await saveConfig(draft);
-    whitelistedHosts = draft.suspension.exemptions.urlPatterns;
+    whitelistPatterns = draft.suspension.exemptions.urlPatterns;
   }
 
   function isWhitelisted(tab: LiveRow): boolean {
-    const pattern = hostnamePattern(tab.url);
-    return pattern !== null && whitelistedHosts.includes(pattern);
+    return matchesUrlPattern(tab.url, whitelistPatterns);
   }
+
+  /** The row's sleep state — always from the shared classifier, never re-derived here. */
+  function stateFor(tab: LiveRow): TabState {
+    return classifyTabState({
+      active: tab.active,
+      discarded: tab.discarded,
+      pinned: tab.pinned,
+      audible: tab.audible,
+      autoDiscardable: tab.autoDiscardable,
+      url: tab.url,
+      urlPatterns: whitelistPatterns,
+      exemptions: { pinnedTabs: pinnedExempt, audibleTabs: audibleExempt },
+      lastActivityAt: activity[String(tab.tabId)] ?? 0,
+      now,
+      idleThresholdMs: thresholdMs,
+    });
+  }
+
+  const STATE_ICON: Record<TabStateKind, 'sun' | 'moon' | 'zzz' | 'shield'> = {
+    active: 'sun',
+    awake: 'moon',
+    due: 'moon',
+    asleep: 'zzz',
+    protected: 'shield',
+  };
+
+  /** Temperature carries meaning: amber awake, rust ageing, moonlight asleep, green protected. */
+  const STATE_TONE: Record<TabStateKind, string> = {
+    active: 'text-awake',
+    awake: 'text-faint',
+    due: 'text-stale',
+    asleep: 'text-asleep',
+    protected: 'text-good',
+  };
 
   /** Chrome's group colours, on our palette's terms. */
   const GROUP_DOT: Record<string, string> = {
@@ -267,23 +329,25 @@
           </div>
         {:else if item?.kind === 'row'}
           {@const tab = item.row}
+          {@const state = stateFor(tab)}
           <div class="absolute left-0 w-full" style="transform:translateY({entry.start}px)">
             <div
               class="group flex h-12 items-start gap-2 border-b border-line/70 px-3 py-2 {tab.active
                 ? 'bg-awake/5'
                 : 'hover:bg-raised'}"
             >
-              <span class="mt-0.5 shrink-0 {tab.active ? 'text-awake' : tab.discarded ? 'text-asleep' : 'text-faint'}">
-                <Icon name={tab.active ? 'sun' : tab.discarded ? 'moon' : 'layers'} size={13} />
+              <span class="mt-0.5 shrink-0 {STATE_TONE[state.kind]}" title={state.label}>
+                <Icon name={STATE_ICON[state.kind]} size={13} />
               </span>
               <div class="min-w-0 flex-1">
                 <p class="truncate text-[13px] {tab.active ? 'font-semibold text-ink' : 'text-ink'}" title={tab.url}>{tab.title}</p>
                 <p class="num mt-0.5 flex items-center gap-1.5 text-[11px] text-dim">
                   <span class="min-w-0 truncate">{HOSTNAME(tab.url)}</span>
-                  {#if tab.active}<span class="text-line-strong">·</span><span class="text-awake">focused</span>{/if}
-                  {#if tab.discarded}<span class="text-line-strong">·</span><span class="text-asleep">asleep</span>{/if}
-                  {#if tab.pinned}<span class="text-line-strong">·</span><span class="text-faint">pinned</span>{/if}
-                  {#if isWhitelisted(tab)}<span class="text-line-strong">·</span><span class="text-good">shielded</span>{/if}
+                  <span class="text-line-strong">·</span>
+                  <span class="{STATE_TONE[state.kind]} shrink-0">{state.label}</span>
+                  {#if tab.pinned && state.protection !== 'pinned'}
+                    <span class="text-line-strong">·</span><span class="text-faint">pinned</span>
+                  {/if}
                 </p>
               </div>
               <div

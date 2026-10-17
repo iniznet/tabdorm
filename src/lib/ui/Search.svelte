@@ -155,7 +155,7 @@
             onclick={() => void focusTab(hit)}
           >
             <Icon
-              name={hit.discarded ? 'moon' : 'external'}
+              name={hit.discarded ? 'zzz' : 'external'}
               size={12}
               class="shrink-0 {hit.discarded ? 'text-asleep' : 'text-faint'}"
             />

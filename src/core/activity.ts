@@ -20,6 +20,11 @@ export async function touchActivity(tabId: number, at: number = Date.now()): Pro
   await writeActivity(map);
 }
 
+/** Read-only view of the per-tab clocks, for surfaces that explain sleep states. */
+export async function getActivitySnapshot(): Promise<Record<string, number>> {
+  return readActivity();
+}
+
 export async function getLastActivity(tabId: number): Promise<number> {
   const map = await readActivity();
   const at = map[String(tabId)];

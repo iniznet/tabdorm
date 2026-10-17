@@ -209,7 +209,7 @@
           : 'border-line text-faint'}"
         title="Tabs natively discarded in this window"
       >
-        <Icon name="moon" size={11} />
+        <Icon name="zzz" size={11} />
         {asleepCount}/{tabCount}
       </span>
       <div class="ml-auto flex items-center gap-0.5">

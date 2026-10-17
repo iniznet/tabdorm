@@ -177,7 +177,7 @@
       {@const stale = isStale(row, thresholdMs, now)}
       <li class="group flex items-start gap-2 border-b border-line/70 px-3 py-2 hover:bg-raised">
         <span class="mt-0.5 shrink-0 {row.discarded ? 'text-asleep' : stale ? 'text-stale' : 'text-faint'}">
-          <Icon name={row.discarded ? 'moon' : row.audible ? 'speaker' : row.pinned ? 'pin' : 'clock'} size={13} />
+          <Icon name={row.discarded ? 'zzz' : row.audible ? 'speaker' : row.pinned ? 'pin' : 'clock'} size={13} />
         </span>
         <button class="min-w-0 flex-1 text-left" title={row.url} onclick={() => void focusTab(row)}>
           <span class="block truncate text-[13px] {row.active ? 'font-semibold text-ink' : 'text-ink'}">{row.title}</span>

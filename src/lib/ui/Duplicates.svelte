@@ -125,7 +125,7 @@
           {#each group.entries as entry (entry.tabId)}
             <li class="flex items-center gap-1.5 py-0.5">
               <span class="shrink-0 {entry.active ? 'text-awake' : entry.discarded ? 'text-asleep' : 'text-faint'}">
-                <Icon name={entry.active ? 'sun' : entry.discarded ? 'moon' : 'layers'} size={11} />
+                <Icon name={entry.active ? 'sun' : entry.discarded ? 'zzz' : 'layers'} size={11} />
               </span>
               <span
                 class="min-w-0 flex-1 truncate text-[11px] {entry.tabId === group.keepTabId ? 'text-ink' : 'text-dim'}"
