@@ -5,6 +5,7 @@
   import Collections from '@/lib/ui/Collections.svelte';
   import Search from '@/lib/ui/Search.svelte';
   import Duplicates from '@/lib/ui/Duplicates.svelte';
+  import StaleTabs from '@/lib/ui/StaleTabs.svelte';
   import { pageSessions, deleteSession as deleteSessionById, renameSession, putSession } from '@/core/db';
   import { contentHashOf } from '@/core/hash';
   import { sendToBackground } from '@/core/messaging';
@@ -229,6 +230,8 @@
   <Search onOpenSession={(s) => (selected = s)} />
 
   <Duplicates />
+
+  <StaleTabs />
 
   <section class="flex min-h-0 flex-[2] flex-col">
     <h2 class="mb-1 pl-0.5 text-[10px] font-semibold uppercase tracking-wider text-faint">Current window</h2>

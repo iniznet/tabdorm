@@ -1,6 +1,6 @@
 <script lang="ts">
   import { findDuplicateGroups, type DuplicateGroup } from '@/core/duplicates';
-  import type { CloseDuplicateOutcome } from '@/core/close-duplicates';
+  import { describeCloseOutcome, parseCloseOutcome } from '@/core/close-duplicates';
   import { sendToBackground } from '@/core/messaging';
 
   let groups: DuplicateGroup[] = $state([]);
@@ -9,14 +9,6 @@
   let notice: string = $state('');
 
   const extraCount = $derived(groups.reduce((sum, group) => sum + group.entries.length - 1, 0));
-
-  function isCloseOutcome(payload: unknown): payload is CloseDuplicateOutcome {
-    if (typeof payload !== 'object' || payload === null) return false;
-    const p = payload as Record<string, unknown>;
-    if (!Array.isArray(p['closed']) || !p['closed'].every((n) => typeof n === 'number')) return false;
-    if (!Array.isArray(p['skipped'])) return false;
-    return p['skipped'].every((s) => typeof s === 'object' && s !== null && typeof (s as Record<string, unknown>)['tabId'] === 'number' && typeof (s as Record<string, unknown>)['reason'] === 'string');
-  }
 
   async function scan(): Promise<void> {
     const tabs = await chrome.tabs.query({});
@@ -72,12 +64,8 @@
 
   function summarize(res: { ok: boolean; payload?: unknown; error?: string }): string {
     if (!res.ok) return 'Close failed: ' + (res.error ?? 'unknown error');
-    if (!isCloseOutcome(res.payload)) return 'Close failed: unexpected response.';
-    const outcome: CloseDuplicateOutcome = res.payload;
-    const keptNote = outcome.skipped.some((s) => s.reason === 'active') ? ' · active tab kept' : '';
-    const formNote = outcome.skipped.filter((s) => s.reason === 'unsaved-form').length;
-    const formStr = formNote > 0 ? ` · ${formNote} skipped (unsaved form)` : '';
-    return `Closed ${res.payload.closed.length} duplicate tab(s)${keptNote}${formStr}.`;
+    const outcome = parseCloseOutcome(res.payload);
+    return outcome === null ? 'Close failed: unexpected response.' : describeCloseOutcome(outcome);
   }
 </script>
 

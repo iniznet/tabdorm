@@ -6,6 +6,7 @@ TabDorm uses three storage tiers, each matched to the volatility of its data:
 | --- | --- | --- |
 | `chrome.storage.sync` | The single `TabDormConfig` object (all knobs, whitelist, routing rules) | Synced across the user’s profile |
 | `chrome.storage.session` | Tab activity timestamps, wake-cooldown deadline, previous-active-tab map, per-window activation history for close-focus, cold-start seed flag | In-memory; survives SW restarts, wiped on browser restart |
+| `chrome.storage.local` | Per-tab visit records for the Stale view (`tabdorm:tabStats`) | Persistent across browser restarts; pruned against live tab ids at bootstrap |
 | IndexedDB (Dexie) | Session history: auto snapshots, saved sessions, closed-window captures | Persistent (`navigator.storage.persist()` requested at startup) |
 
 ## Config resolution

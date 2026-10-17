@@ -46,6 +46,9 @@ export const DEFAULT_TAB_DORM_CONFIG: TabDormConfig = {
     historyDepth: 8,
     restoreSettleMs: 300,
   },
+  stale: {
+    staleAfterDays: 7,
+  },
   restoration: {
     batchSize: 10,
     delayBetweenTabsMs: 50,
@@ -76,6 +79,7 @@ const NUMERIC_BOUNDS = {
   maxSnapshotsRetained: { min: 1, max: 10_000 },
   retentionDays: { min: 1, max: 3_650 },
   autoBackupDownloadDays: { min: 0, max: 365 },
+  staleAfterDays: { min: 0, max: 365 },
 } as const;
 
 function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
@@ -145,6 +149,7 @@ export function resolveConfig(raw: unknown): TabDormConfig {
   const g = readObject(source['groups']);
   const r = readObject(g['routing']);
   const focus = readObject(source['focus']);
+  const st = readObject(source['stale']);
   const rest = readObject(source['restoration']);
   const snap = readObject(source['snapshots']);
   const b = NUMERIC_BOUNDS;
@@ -190,6 +195,9 @@ export function resolveConfig(raw: unknown): TabDormConfig {
       onActiveTabClosed: readCloseFocusMode(focus['onActiveTabClosed']),
       historyDepth: clampNumber(focus['historyDepth'], DEFAULT_TAB_DORM_CONFIG.focus.historyDepth, b.historyDepth.min, b.historyDepth.max),
       restoreSettleMs: clampNumber(focus['restoreSettleMs'], DEFAULT_TAB_DORM_CONFIG.focus.restoreSettleMs, b.restoreSettleMs.min, b.restoreSettleMs.max),
+    },
+    stale: {
+      staleAfterDays: clampNumber(st['staleAfterDays'], DEFAULT_TAB_DORM_CONFIG.stale.staleAfterDays, b.staleAfterDays.min, b.staleAfterDays.max),
     },
     restoration: {
       batchSize: clampNumber(rest['batchSize'], DEFAULT_TAB_DORM_CONFIG.restoration.batchSize, b.batchSize.min, b.batchSize.max),

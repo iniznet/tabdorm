@@ -13,6 +13,7 @@ TabDorm is an open-source Chromium (Manifest V3) extension that frees memory by 
 - **Domain auto-routing** — wildcard/regex rules cluster tabs into native tab groups as you browse, with per-rule auto-collapse.
 - **Group auto-collapse** — collapse the previous group when you switch away, collapse idle groups on a timer, and optionally suspend a group’s tabs the moment it collapses (works for manual collapses too).
 - **Focus restore on close** — closing the active tab can return you to the tab you came from (optionally only when it sits in a different group) instead of the neighbouring tab Chrome picks, so a close never drops you into the group you just left.
+- **Stale tabs** — TabDorm remembers when you last looked at each tab and ranks every open tab by age, so the ones you collected and never revisited are easy to find (and to snapshot-then-close in bulk).
 - **Session snapshots** — periodic auto-snapshots with hash deduplication and retention caps, manual snapshots, closed-window capture, JSON export/import, and paced multi-window restoration that never spikes CPU.
 - **TMS migration** — one-click import of The Marvellous Suspender tabs, decoding `suspended.html#uri=…` links back to their real URLs.
 - **Memory-saver defense** — whitelisted and protected tabs are shielded from Chrome’s own Memory Saver via `autoDiscardable: false`.

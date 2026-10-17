@@ -1,6 +1,7 @@
 import { runSweepOnce, syncSweepAlarm, SWEEP_ALARM } from '@/core/suspension';
 import { collapseIdleGroups, initGroupCollapse } from '@/core/group-collapse';
 import { initCloseFocus } from '@/core/close-focus-tabs';
+import { initTabStats, pruneTabStats } from '@/core/tab-stats';
 import { ensureColdStartSeeded, forgetActivity, touchActivity } from '@/core/activity';
 import { updateAsleepBadge } from '@/core/badge';
 import { initContextMenus, suspendOtherTabs, toggleWhitelistForTab } from '@/core/context-menus';
@@ -40,6 +41,7 @@ export default defineBackground(() => {
   });
   initGroupCollapse();
   initCloseFocus();
+  initTabStats();
   registerSnapshotAlarmListener(shadowTree);
   registerActivityTracking();
   registerBackgroundMessageHandler((request, sender) => handleMessage(request, shadowTree, sender));
@@ -89,6 +91,7 @@ async function bootstrap(shadowTree: ShadowTree): Promise<void> {
   }
   void initDatabase();
   await shadowTree.init();
+  await pruneTabStats();
   void updateAsleepBadge();
   void backfillRouting();
 }

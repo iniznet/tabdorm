@@ -64,6 +64,10 @@ export interface TabDormConfig {
     /** Grace window (ms) for correcting a late browser-chosen activation; 0 disables it. */
     restoreSettleMs: number;
   };
+  stale: {
+    /** Days without a visit before a tab is flagged stale; 0 disables flagging. */
+    staleAfterDays: number;
+  };
   restoration: {
     batchSize: number;
     delayBetweenTabsMs: number;
