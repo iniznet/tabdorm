@@ -17,6 +17,7 @@ export const DEFAULT_TAB_DORM_CONFIG: TabDormConfig = {
     sweepIntervalMinutes: 1,
     memorySaverPolicy: 'cooperative',
     wakeCooldownMs: 120_000,
+    stripSleepIcon: true,
     exemptions: {
       pinnedTabs: true,
       audibleTabs: true,
@@ -165,6 +166,7 @@ export function resolveConfig(raw: unknown): TabDormConfig {
           ? s['memorySaverPolicy']
           : 'cooperative',
       wakeCooldownMs: clampNumber(s['wakeCooldownMs'], DEFAULT_TAB_DORM_CONFIG.suspension.wakeCooldownMs, b.wakeCooldownMs.min, b.wakeCooldownMs.max),
+      stripSleepIcon: readBool(s['stripSleepIcon'], DEFAULT_TAB_DORM_CONFIG.suspension.stripSleepIcon),
       exemptions: {
         pinnedTabs: readBool(ex['pinnedTabs'], DEFAULT_TAB_DORM_CONFIG.suspension.exemptions.pinnedTabs),
         audibleTabs: readBool(ex['audibleTabs'], DEFAULT_TAB_DORM_CONFIG.suspension.exemptions.audibleTabs),
