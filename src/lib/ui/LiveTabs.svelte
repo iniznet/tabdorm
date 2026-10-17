@@ -14,7 +14,18 @@
     active: boolean;
     pinned: boolean;
     discarded: boolean;
+    groupId: number;
   }
+
+  interface GroupMeta {
+    title: string;
+    color: string;
+    index: number;
+  }
+
+  type Item =
+    | { kind: 'header'; key: string; label: string; color: string; count: number }
+    | { kind: 'row'; key: string; row: LiveRow };
 
   interface Props {
     onStats?: (total: number, asleep: number) => void;
@@ -22,40 +33,83 @@
 
   let { onStats }: Props = $props();
 
+  const GROUP_NONE = -1;
+
   let rows: LiveRow[] = $state([]);
+  let groups = $state<Map<number, GroupMeta>>(new Map());
   let filter = $state('');
   let scrollEl: HTMLDivElement | undefined = $state();
   let suspendingId: number | null = $state(null);
   let whitelistedHosts: string[] = $state([]);
 
-  const visible = $derived(
+  const filtered = $derived(
     filter.trim() === ''
       ? rows
       : rows.filter((r) => (r.title + ' ' + r.url).toLowerCase().includes(filter.trim().toLowerCase())),
   );
 
+  /**
+   * Chrome's own grouping is preserved: one section per tab group in the browser's
+   * group order, ungrouped tabs last. Filtering narrows rows inside a section and
+   * drops a section only when nothing in it matches.
+   */
+  const items = $derived.by<Item[]>(() => {
+    const buckets = new Map<number, LiveRow[]>();
+    for (const row of filtered) {
+      const list = buckets.get(row.groupId);
+      if (list === undefined) buckets.set(row.groupId, [row]);
+      else list.push(row);
+    }
+    const order = [...buckets.keys()].sort((a, b) => {
+      if (a === GROUP_NONE) return 1;
+      if (b === GROUP_NONE) return -1;
+      return (groups.get(a)?.index ?? 0) - (groups.get(b)?.index ?? 0);
+    });
+    const out: Item[] = [];
+    for (const groupId of order) {
+      const list = buckets.get(groupId) ?? [];
+      if (groupId === GROUP_NONE) {
+        if (order.length > 1) out.push({ kind: 'header', key: 'h-none', label: 'Ungrouped', color: '', count: list.length });
+      } else {
+        const meta = groups.get(groupId);
+        out.push({
+          kind: 'header',
+          key: 'h-' + String(groupId),
+          label: meta === undefined || meta.title === '' ? 'Group' : meta.title,
+          color: meta?.color ?? 'grey',
+          count: list.length,
+        });
+      }
+      for (const row of list) out.push({ kind: 'row', key: 'r-' + String(row.tabId), row });
+    }
+    return out;
+  });
+
   const virtualizer = createVirtualizer({
     get count() {
-      return visible.length;
+      return items.length;
     },
     getScrollElement: () => scrollEl ?? null,
-    estimateSize: () => 48,
+    estimateSize: (index) => (items[index]?.kind === 'header' ? 28 : 48),
+    getItemKey: (index) => items[index]?.key ?? index,
     overscan: 10,
   });
   $effect(() => {
-    const count = visible.length;
+    const count = items.length;
     get(virtualizer).setOptions({ count });
   });
+
   let lastScrolledActiveId: number | null = null;
   $effect(() => {
-    const activeIndex = visible.findIndex((r) => r.active);
-    if (activeIndex === -1) return;
-    const row = visible[activeIndex];
-    if (row === undefined || row.tabId === lastScrolledActiveId) return;
-    lastScrolledActiveId = row.tabId;
-    get(virtualizer).scrollToIndex(activeIndex, { align: 'auto' });
+    const index = items.findIndex((item) => item.kind === 'row' && item.row.active);
+    if (index === -1) return;
+    const item = items[index];
+    if (item === undefined || item.kind !== 'row' || item.row.tabId === lastScrolledActiveId) return;
+    lastScrolledActiveId = item.row.tabId;
+    get(virtualizer).scrollToIndex(index, { align: 'auto' });
   });
-  const items = $derived($virtualizer.getVirtualItems());
+
+  const virtualItems = $derived($virtualizer.getVirtualItems());
   const total = $derived($virtualizer.getTotalSize());
 
   onMount(() => {
@@ -64,17 +118,32 @@
     chrome.tabs.onUpdated.addListener(onChange);
     chrome.tabs.onRemoved.addListener(onChange);
     chrome.tabs.onCreated.addListener(onChange);
+    chrome.tabGroups.onUpdated?.addListener(onChange);
+    chrome.tabGroups.onCreated?.addListener(onChange);
+    chrome.tabGroups.onRemoved?.addListener(onChange);
     return () => {
       chrome.tabs.onUpdated.removeListener(onChange);
       chrome.tabs.onRemoved.removeListener(onChange);
       chrome.tabs.onCreated.removeListener(onChange);
+      chrome.tabGroups.onUpdated?.removeListener(onChange);
+      chrome.tabGroups.onCreated?.removeListener(onChange);
+      chrome.tabGroups.onRemoved?.removeListener(onChange);
     };
   });
 
   async function refresh(): Promise<void> {
     const win = await chrome.windows.getLastFocused();
     if (win.id === undefined) return;
-    const tabs = await chrome.tabs.query({ windowId: win.id });
+    const [tabs, tabGroups] = await Promise.all([
+      chrome.tabs.query({ windowId: win.id }),
+      chrome.tabGroups.query({ windowId: win.id }),
+    ]);
+    const nextGroups = new Map<number, GroupMeta>();
+    // tabGroups.query returns groups in browser strip order; that order is the index.
+    tabGroups.forEach((group, position) => {
+      nextGroups.set(group.id, { title: group.title ?? '', color: group.color ?? 'grey', index: position });
+    });
+    groups = nextGroups;
     rows = tabs
       .filter((t) => t.id !== undefined)
       .map((t) => ({
@@ -84,6 +153,7 @@
         active: t.active === true,
         pinned: t.pinned === true,
         discarded: t.discarded === true,
+        groupId: t.groupId === undefined ? GROUP_NONE : t.groupId,
       }));
     onStats?.(rows.length, rows.filter((r) => r.discarded).length);
     const config = await getConfig();
@@ -139,6 +209,19 @@
     return pattern !== null && whitelistedHosts.includes(pattern);
   }
 
+  /** Chrome's group colours, on our palette's terms. */
+  const GROUP_DOT: Record<string, string> = {
+    grey: 'bg-faint',
+    blue: 'bg-asleep',
+    cyan: 'bg-asleep',
+    green: 'bg-good',
+    yellow: 'bg-awake',
+    orange: 'bg-stale',
+    red: 'bg-bad',
+    pink: 'bg-stale',
+    purple: 'bg-awake',
+  };
+
   const HOSTNAME = (url: string): string => {
     try {
       return new URL(url).hostname.replace(/^www\./, '');
@@ -148,14 +231,16 @@
   };
 </script>
 
-<div class="flex min-h-0 flex-1 flex-col">
-  <div class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-line px-3 py-2">
-    <p class="num min-w-0 flex-1 text-[12px] text-dim">
+<div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+  <div class="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2">
+    <p class="num min-w-0 flex-1 truncate text-[12px] text-dim">
       <span class="font-semibold text-ink">{rows.length}</span>
       <span class="text-faint">in this window ·</span>
       {rows.filter((r) => r.discarded).length} asleep
     </p>
-    <div class="flex h-7 min-w-0 flex-1 basis-28 items-center gap-1 rounded-md border border-line bg-overlay px-1.5 focus-within:border-line-strong">
+    <div
+      class="flex h-7 w-[42%] min-w-24 items-center gap-1 rounded-md border border-line bg-overlay px-1.5 focus-within:border-line-strong"
+    >
       <Icon name="search" size={12} class="shrink-0 text-faint" />
       <input
         class="min-w-0 flex-1 bg-transparent text-[12px] text-ink placeholder:text-faint focus:outline-none"
@@ -166,12 +251,23 @@
     </div>
   </div>
 
-  <div bind:this={scrollEl} class="min-h-0 flex-1 overflow-y-auto">
+  <div bind:this={scrollEl} class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
     <div class="relative w-full" style="height:{total}px">
-      {#each items as row (row.key)}
-        {@const tab = visible[row.index]}
-        {#if tab}
-          <div class="absolute left-0 w-full" style="transform:translateY({row.start}px)">
+      {#each virtualItems as entry (entry.key)}
+        {@const item = items[entry.index]}
+        {#if item?.kind === 'header'}
+          <div class="absolute left-0 w-full" style="transform:translateY({entry.start}px)">
+            <div class="flex h-7 items-center gap-1.5 border-b border-line/60 bg-raised px-3">
+              {#if item.color !== ''}
+                <span class="h-1.5 w-1.5 shrink-0 rounded-full {GROUP_DOT[item.color] ?? 'bg-faint'}"></span>
+              {/if}
+              <span class="min-w-0 flex-1 truncate text-[11px] font-medium text-dim" title={item.label}>{item.label}</span>
+              <span class="num shrink-0 text-[10px] text-faint">{item.count}</span>
+            </div>
+          </div>
+        {:else if item?.kind === 'row'}
+          {@const tab = item.row}
+          <div class="absolute left-0 w-full" style="transform:translateY({entry.start}px)">
             <div
               class="group flex h-12 items-start gap-2 border-b border-line/70 px-3 py-2 {tab.active
                 ? 'bg-awake/5'
@@ -190,10 +286,12 @@
                   {#if isWhitelisted(tab)}<span class="text-line-strong">·</span><span class="text-good">shielded</span>{/if}
                 </p>
               </div>
-              <div class="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-120 focus-within:opacity-100 group-hover:opacity-100">
+              <div
+                class="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-120 focus-within:opacity-100 group-hover:opacity-100"
+              >
                 {#if !tab.discarded}
                   <button
-                    class="grid h-6 w-6 place-items-center rounded text-faint hover:bg-overlay hover:text-asleep disabled:opacity-30 focus-visible:opacity-100"
+                    class="grid h-6 w-6 place-items-center rounded text-faint hover:bg-overlay hover:text-asleep focus-visible:opacity-100 disabled:opacity-30"
                     disabled={tab.active || suspendingId !== null}
                     title={tab.active ? 'The focused tab cannot be suspended' : 'Put this tab to sleep'}
                     aria-label="Put this tab to sleep"
@@ -205,9 +303,7 @@
                     ? 'text-good'
                     : 'text-faint hover:text-ink'}"
                   disabled={tab.discarded || isWhitelisted(tab)}
-                  title={isWhitelisted(tab)
-                    ? `${HOSTNAME(tab.url)} is shielded`
-                    : `Never sleep ${HOSTNAME(tab.url)}`}
+                  title={isWhitelisted(tab) ? `${HOSTNAME(tab.url)} is shielded` : `Never sleep ${HOSTNAME(tab.url)}`}
                   aria-label="Shield this site from sleeping"
                   onclick={() => void whitelist(tab)}><Icon name="shield" size={13} /></button
                 >
@@ -231,8 +327,8 @@
     </div>
   </div>
 
-  {#if visible.length === 0}
-    <div class="px-4 py-6 text-center">
+  {#if filtered.length === 0}
+    <div class="shrink-0 px-4 py-6 text-center">
       {#if rows.length === 0}
         <p class="text-[13px] text-ink">No tabs in the focused window.</p>
         <p class="mt-1 text-[12px] text-dim">Click into a window and its tabs appear here.</p>

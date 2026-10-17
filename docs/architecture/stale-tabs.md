@@ -16,6 +16,7 @@ Age is **never** derived from the session clock: a restart would reset it, and t
 - Key `tabdorm:tabStats`, shape `{ [tabId]: { firstSeen, lastActive } }`.
 - Written on `tabs.onCreated` (a background tab keeps `lastActive = 0`, i.e. an unknown age), on `tabs.onActivated`, and on a completed navigation of the active tab.
 - Dropped on `tabs.onRemoved`, and pruned against live tab ids at every bootstrap — tab ids are reused across browser runs, so a stale record must never be attributed to a new tab.
+- **Seeded, not unknown.** Tabs that already existed when the feature shipped get a record from Chrome's own `tab.lastAccessed` (`seedTabStats()` at bootstrap, and the same field as a per-row fallback), so a first run shows real ages instead of `age unknown`.
 - Stored payload passes an explicit validator (`parseTabStats`); malformed records are dropped instead of trusted.
 
 ## The Stale view
@@ -24,7 +25,7 @@ Age is **never** derived from the session clock: a restart would reset it, and t
 
 - Rows with no visit record sort first — the tracker never saw you open them — then the oldest visit first.
 - Each row shows age, group title, and asleep 💤 / pinned 📌 / audible 🔊 badges. Clicking a row focuses that tab (which marks it visited).
-- `stale.staleAfterDays` (Options → Stale tabs, default 7, 0 disables flagging) marks rows past the threshold; the header counts them.
+- `stale.staleAfterHours` (Options → Stale tabs, default 168 = one week, 0 disables flagging) marks rows past the threshold; the header counts them. Hours, not days, because a 12-hour threshold is a real case: `ageLabel()` renders `just now` / `12 min` / `5 h` / `3 d` / `2 w` and `durationLabel()` renders the same units for the threshold.
 
 ## Bulk close safety
 

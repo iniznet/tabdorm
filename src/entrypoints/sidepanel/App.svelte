@@ -199,7 +199,7 @@
   }
 </script>
 
-<div class="flex h-full min-h-0 flex-col bg-surface text-ink">
+<div class="flex h-dvh min-h-0 flex-col overflow-hidden bg-surface text-ink">
   <header class="sticky top-0 z-20 shrink-0 border-b border-line bg-raised/95 backdrop-blur-sm">
     <div class="flex items-center gap-2 px-3 pt-2.5 pb-2">
       <h1 class="text-[15px] font-semibold text-ink">TabDorm</h1>
@@ -293,25 +293,25 @@
     </div>
   {/if}
 
-  <main class="flex min-h-0 flex-1 flex-col">
+  <main class="flex min-h-0 flex-1 flex-col overflow-hidden">
     {#if view === 'tabs'}
-      <div class="flex min-h-0 flex-1 flex-col">
+      <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
         <LiveTabs onStats={(total, asleep) => { tabCount = total; asleepCount = asleep; }} />
       </div>
     {:else if view === 'stale'}
-      <div class="flex min-h-0 flex-1 flex-col">
+      <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
         <StaleTabs />
       </div>
     {:else if view === 'dups'}
-      <div class="flex min-h-0 flex-1 flex-col">
+      <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
         <Duplicates />
       </div>
     {:else if view === 'sets'}
-      <div class="flex min-h-0 flex-1 flex-col">
+      <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
         <Collections />
       </div>
     {:else if selected !== null}
-      <div class="flex min-h-0 flex-1 flex-col">
+      <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
         <SessionDetail
           session={selected}
           {busyId}
@@ -322,7 +322,7 @@
         />
       </div>
     {:else}
-      <div class="flex min-h-0 flex-1 flex-col">
+      <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
         <SessionList
           {sessions}
           onRestore={(s, options) => void restore(s, options)}

@@ -127,24 +127,41 @@
   };
 </script>
 
-<div class="flex min-h-0 flex-1 flex-col">
-  <div class="mb-1 flex items-center gap-2">
-    <button
-      class="rounded-md border border-line px-2 py-1 text-[11px] text-dim hover:border-faint hover:text-ink disabled:opacity-50"
-      disabled={busy}
-      onclick={() => void saveCurrentTabs()}>＋ Save current tabs</button
-    >
+<div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+  <div class="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2">
+    <p class="num min-w-0 flex-1 text-[12px] text-dim">
+      <span class="font-semibold text-ink">{items.length}</span>
+      <span class="text-faint">set{items.length === 1 ? '' : 's'}</span>
+    </p>
     {#if hasMore && items.length > 0}
-      <button class="text-[11px] text-dim hover:text-ink" onclick={() => void loadMore()}>Load more…</button>
+      <button class="shrink-0 rounded-md px-1.5 py-1 text-[11px] text-dim hover:bg-overlay hover:text-ink" onclick={() => void loadMore()}>
+        Load more
+      </button>
     {/if}
+    <button
+      class="flex shrink-0 items-center gap-1 rounded-md border border-line px-2 py-1 text-[11px] font-medium text-ink hover:border-line-strong hover:bg-overlay disabled:opacity-40"
+      disabled={busy}
+      onclick={() => void saveCurrentTabs()}><Icon name="plus" size={12} /> Save current tabs</button
+    >
   </div>
   {#if notice !== ''}
-    <p class="mb-1 rounded-md bg-overlay px-2 py-1 text-[12px] text-dim" role="status">{notice}</p>
+    <div class="flex items-start gap-1.5 border-b border-line px-3 py-1.5 text-[11px] text-dim" role="status">
+      <Icon name="check" size={12} class="mt-0.5 shrink-0 text-good" />
+      <p class="min-w-0 flex-1 break-words">{notice}</p>
+    </div>
   {/if}
   {#if items.length === 0}
-    <p class="py-2 text-center text-[12px] text-faint">No collections yet. Save the current window’s tabs to start one.</p>
+    <div class="px-4 py-6 text-center">
+      <p class="text-[13px] text-ink">No sets yet.</p>
+      <p class="mt-1 text-[12px] text-dim">Save the current window’s tabs as a named set you can reopen later.</p>
+      <button
+        class="mt-3 inline-flex items-center gap-1 rounded-md bg-awake px-2.5 py-1.5 text-[12px] font-semibold text-on-awake hover:bg-accent-strong disabled:opacity-40"
+        disabled={busy}
+        onclick={() => void saveCurrentTabs()}><Icon name="plus" size={12} /> Save current tabs</button
+      >
+    </div>
   {:else}
-    <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
+    <div class="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
       {#each items as c (c.id)}
         <details class="border-b border-line/70 px-3 py-2">
           <summary class="flex cursor-pointer list-none items-center gap-2 text-[12px]">

@@ -126,8 +126,8 @@
   const BTN = 'rounded-md border border-line px-2 py-1 text-[12px] text-dim hover:border-faint hover:text-ink disabled:opacity-50';
 </script>
 
-<div class="flex min-h-0 flex-1 flex-col">
-  <div class="flex items-center gap-1.5 border-b border-line px-3 py-2">
+<div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+  <div class="flex shrink-0 items-center gap-1.5 border-b border-line px-3 py-2">
     <button
       class="grid h-7 w-7 shrink-0 place-items-center rounded-md text-dim hover:bg-overlay hover:text-ink"
       aria-label="Back to sessions"

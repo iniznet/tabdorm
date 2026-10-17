@@ -109,7 +109,7 @@
     </div>
   {/if}
 
-  <div class="min-h-0 flex-1 overflow-y-auto">
+  <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
     {#each groups as group (group.key)}
       <section class="border-b border-line/70">
         <div class="flex items-center gap-2 px-3 pt-2 pb-1">

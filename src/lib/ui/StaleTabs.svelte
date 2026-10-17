@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ageLabel, isStale, selectClosable, sortStale, type StaleRow } from '@/core/stale';
+  import { ageLabel, durationLabel, isStale, selectClosable, sortStale, type StaleRow } from '@/core/stale';
   import { getTabStats } from '@/core/tab-stats';
   import { getConfig } from '@/core/config-store';
   import { sendToBackground } from '@/core/messaging';
@@ -9,16 +9,18 @@
   const GROUP_NONE = -1;
 
   let rows: StaleRow[] = $state([]);
-  let threshold: number = $state(0);
+  /** Staleness threshold in milliseconds; 0 disables flagging. */
+  let thresholdMs: number = $state(0);
+  /** Refreshed on every scan so "12 min" does not freeze at mount time. */
+  let now: number = $state(Date.now());
   let ready: boolean = $state(false);
   let busy: boolean = $state(false);
   let filter: string = $state('');
   let notice: string = $state('');
 
-  const now = Date.now();
   const sorted = $derived(sortStale(rows));
-  const staleRows = $derived(rows.filter((row) => isStale(row, threshold, now)));
-  const closable = $derived(selectClosable(rows, threshold, now));
+  const staleRows = $derived(rows.filter((row) => isStale(row, thresholdMs, now)));
+  const closable = $derived(selectClosable(rows, thresholdMs, now));
   const visible = $derived(
     filter.trim() === ''
       ? sorted
@@ -47,12 +49,15 @@
       const title = group.title;
       if (title !== undefined && title !== '') titles.set(group.id, title);
     }
-    threshold = config.stale.staleAfterDays;
+    thresholdMs = config.stale.staleAfterHours * 3_600_000;
+    now = Date.now();
     rows = tabs
       .filter((tab) => tab.id !== undefined)
       .map((tab) => {
         const tabId = tab.id as number;
         const stat = stats[String(tabId)];
+        // Chrome dates every tab it knows, including ones older than this feature.
+        const lastAccessed = typeof tab.lastAccessed === 'number' && tab.lastAccessed > 0 ? tab.lastAccessed : 0;
         const groupId = tab.groupId === undefined ? GROUP_NONE : tab.groupId;
         return {
           tabId,
@@ -64,8 +69,8 @@
           active: tab.active === true,
           audible: tab.audible === true,
           discarded: tab.discarded === true,
-          firstSeen: stat?.firstSeen ?? 0,
-          lastActive: stat?.lastActive ?? 0,
+          firstSeen: stat?.firstSeen ?? lastAccessed,
+          lastActive: stat?.lastActive ?? lastAccessed,
         };
       });
     ready = true;
@@ -116,7 +121,7 @@
   }
 
   async function closeStale(withSnapshot: boolean): Promise<void> {
-    const targets = selectClosable(rows, threshold, Date.now()).map((row) => row.tabId);
+    const targets = selectClosable(rows, thresholdMs, Date.now()).map((row) => row.tabId);
     if (targets.length === 0) {
       notice = 'No stale tab to close.';
       return;
@@ -137,19 +142,19 @@
   }
 </script>
 
-<div class="flex min-h-0 flex-1 flex-col">
-  <div class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-line px-3 py-2">
+<div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+  <div class="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2">
     <p class="num min-w-0 flex-1 text-[12px] text-dim">
       <span class="font-semibold {staleRows.length > 0 ? 'text-stale' : 'text-ink'}">{staleRows.length}</span>
       <span class="text-faint">stale of</span>
       {rows.length}
-      {#if threshold > 0}
-        <span class="text-faint">· {threshold}d+</span>
+      {#if thresholdMs > 0}
+        <span class="text-faint">· {durationLabel(thresholdMs)}+</span>
       {:else}
         <span class="text-faint">· flagging off</span>
       {/if}
     </p>
-    <div class="flex h-7 min-w-0 flex-1 basis-28 items-center gap-1 rounded-md border border-line bg-overlay px-1.5 focus-within:border-line-strong">
+    <div class="flex h-7 w-[42%] min-w-24 items-center gap-1 rounded-md border border-line bg-overlay px-1.5 focus-within:border-line-strong">
       <Icon name="search" size={12} class="shrink-0 text-faint" />
       <input
         class="min-w-0 flex-1 bg-transparent text-[12px] text-ink placeholder:text-faint focus:outline-none"
@@ -167,9 +172,9 @@
     </div>
   {/if}
 
-  <ul class="min-h-0 flex-1 overflow-y-auto" aria-label="Tabs by age">
+  <ul class="min-h-0 flex-1 overflow-y-auto overscroll-contain" aria-label="Tabs by age">
     {#each visible as row (row.tabId)}
-      {@const stale = isStale(row, threshold, now)}
+      {@const stale = isStale(row, thresholdMs, now)}
       <li class="group flex items-start gap-2 border-b border-line/70 px-3 py-2 hover:bg-raised">
         <span class="mt-0.5 shrink-0 {row.discarded ? 'text-asleep' : stale ? 'text-stale' : 'text-faint'}">
           <Icon name={row.discarded ? 'moon' : row.audible ? 'speaker' : row.pinned ? 'pin' : 'clock'} size={13} />
@@ -211,13 +216,13 @@
       {:else if filter.trim() !== ''}
         <p class="text-[13px] text-ink">No tab matches “{filter.trim()}”.</p>
         <button class="mt-2 text-[12px] text-awake underline underline-offset-2" onclick={() => (filter = '')}>Clear filter</button>
-      {:else if threshold === 0}
+      {:else if thresholdMs === 0}
         <p class="text-[13px] text-ink">Stale flagging is off.</p>
         <p class="mt-1 text-[12px] text-dim">Ages are tracked, so nothing is hidden — turn flagging on to rank them.</p>
         <button class="mt-2 text-[12px] text-awake underline underline-offset-2" onclick={openOptions}>Open settings</button>
       {:else}
         <p class="text-[13px] text-ink">Nothing stale.</p>
-        <p class="mt-1 text-[12px] text-dim">No tab has gone {threshold} days without a visit. Every row below is younger.</p>
+        <p class="mt-1 text-[12px] text-dim">No tab has gone {durationLabel(thresholdMs)} without a visit. Every row is younger.</p>
       {/if}
     </div>
   {/if}

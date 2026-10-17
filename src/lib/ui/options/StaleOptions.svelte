@@ -15,13 +15,13 @@
   <p class="mt-1 text-[12px] text-dim">TabDorm remembers when you last looked at each tab, so the side panel can list what you have been collecting and not revisiting.</p>
   <div class="mt-3 divide-y divide-line/70">
     <NumberField
-      value={config.stale.staleAfterDays}
+      value={config.stale.staleAfterHours}
       label="Flag a tab as stale after"
-      hint="Days without being viewed. 0 disables flagging — the Stale view still lists every tab by last visit."
+      hint="Hours without being viewed. 168 = one week, 12 = half a day. 0 disables flagging — the Stale view still lists every tab by last visit."
       min={0}
-      max={365}
-      suffix="days"
-      onChange={(v) => onChange((d) => (d.stale.staleAfterDays = v))}
+      max={8760}
+      suffix="hours"
+      onChange={(v) => onChange((d) => (d.stale.staleAfterHours = v))}
     />
   </div>
 </section>

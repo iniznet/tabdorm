@@ -39,22 +39,49 @@
       : sessions.filter((s) => s.name.toLowerCase().includes(query.trim().toLowerCase())),
   );
 
+  type Item =
+    | { kind: 'header'; key: string; label: string; count: number }
+    | { kind: 'row'; key: string; session: UnifiedSession };
+
+  const GROUP_ORDER: UnifiedSession['type'][] = ['user_saved', 'closed_window', 'auto_snapshot'];
+  const GROUP_LABEL: Record<UnifiedSession['type'], string> = {
+    user_saved: 'Saved by you',
+    closed_window: 'Closed windows',
+    auto_snapshot: 'Auto snapshots',
+  };
+
+  /**
+   * Snapshot kinds stay apart under their own heading — a hand-saved snapshot is
+   * not an hourly auto capture — and filtering only narrows rows inside a heading.
+   */
+  const items = $derived.by<Item[]>(() => {
+    const out: Item[] = [];
+    for (const type of GROUP_ORDER) {
+      const list = visible.filter((session) => session.type === type);
+      if (list.length === 0) continue;
+      out.push({ kind: 'header', key: 'h-' + type, label: GROUP_LABEL[type], count: list.length });
+      for (const session of list) out.push({ kind: 'row', key: 'r-' + session.id, session });
+    }
+    return out;
+  });
+
   const virtualizer = createVirtualizer({
     get count() {
-      return visible.length;
+      return items.length;
     },
     getScrollElement: () => scrollEl ?? null,
-    estimateSize: () => 56,
+    estimateSize: (index) => (items[index]?.kind === 'header' ? 26 : 56),
+    getItemKey: (index) => items[index]?.key ?? index,
     overscan: 8,
   });
 
   // Keep the virtualizer's item count in lockstep with filtered, paginated data.
   $effect(() => {
-    const count = visible.length;
+    const count = items.length;
     get(virtualizer).setOptions({ count });
   });
 
-  const rows = $derived($virtualizer.getVirtualItems());
+  const virtualItems = $derived($virtualizer.getVirtualItems());
   const total = $derived($virtualizer.getTotalSize());
 
   function formatWhenLong(ts: number): string {
@@ -96,15 +123,13 @@
   };
 </script>
 
-<div class="flex min-h-0 flex-1 flex-col">
-  <div class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-line px-3 py-2">
+<div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+  <div class="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2">
     <p class="num min-w-0 flex-1 text-[12px] text-dim">
       <span class="font-semibold text-ink">{sessions.length}</span>
       <span class="text-faint">saved</span>
     </p>
-    <div
-      class="flex h-7 min-w-0 flex-1 basis-28 items-center gap-1 rounded-md border border-line bg-overlay px-1.5 focus-within:border-line-strong"
-    >
+    <div class="flex h-7 w-[42%] min-w-24 items-center gap-1 rounded-md border border-line bg-overlay px-1.5 focus-within:border-line-strong">
       <Icon name="search" size={12} class="shrink-0 text-faint" />
       <input
         class="min-w-0 flex-1 bg-transparent text-[12px] text-ink placeholder:text-faint focus:outline-none"
@@ -170,13 +195,26 @@
       </div>
     </div>
   {/if}
-  <div bind:this={scrollEl} class="min-h-0 flex-1 overflow-y-auto">
+  <div bind:this={scrollEl} class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
     <div class="relative w-full" style="height:{total}px">
-      {#each rows as row (row.key)}
-        {@const session = visible[row.index]}
-        {#if session}
+      {#each virtualItems as row (row.key)}
+        {@const item = items[row.index]}
+        {#if item?.kind === 'header'}
           <div class="absolute left-0 w-full" style="transform:translateY({row.start}px)">
-            <div class="relative flex h-14 items-center gap-2 border-b border-line/70 px-3 hover:bg-raised">
+            <div class="flex h-[26px] items-center gap-1.5 border-b border-line/60 bg-raised px-3">
+              <span class="min-w-0 flex-1 truncate text-[11px] font-medium text-dim">{item.label}</span>
+              <span class="num shrink-0 text-[10px] text-faint">{item.count}</span>
+            </div>
+          </div>
+        {:else if item?.kind === 'row'}
+          {@const session = item.session}
+          <div class="absolute left-0 w-full" style="transform:translateY({row.start}px)">
+            <div
+              class="relative flex h-14 items-center gap-2 border-b border-line/70 px-3 hover:bg-raised {menuFor ===
+              session.id
+                ? 'z-30'
+                : ''}"
+            >
               <button class="min-w-0 flex-1 text-left" onclick={() => onSelect(session)}>
                 <p class="truncate text-[13px] text-ink">{session.name}</p>
                 <p class="num mt-0.5 flex items-center gap-1.5 text-[11px] text-dim">
@@ -201,7 +239,7 @@
               >
               {#if menuFor === session.id}
                 <div
-                  class="absolute right-2 top-[44px] z-20 w-44 rounded-[10px] border border-line bg-overlay py-1 shadow-[0_8px_24px_rgb(0_0_0_/_0.45)]">
+                  class="absolute right-2 top-[46px] z-40 w-44 rounded-[10px] border border-line-strong bg-raised py-1 shadow-[0_10px_28px_rgb(0_0_0_/_0.55)]">
                   <button
                     class="block w-full px-3 py-1.5 text-left text-[12px] text-dim hover:bg-overlay hover:text-ink"
                     onclick={(e) => {
