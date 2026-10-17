@@ -32,10 +32,11 @@ The two opt-in guards: **unsaved form input** comes from a tiny runtime-register
 
 ## Sleep-state indicators
 
-Chrome's tab strip cannot be decorated: `chrome.tabs` exposes no title or favicon rewrite, a discarded tab runs no
-renderer, and TabDorm refuses placeholder pages. The indicator therefore lives in TabDorm's own lists, where tabs
-are actually managed. `classifyTabState()` in `src/core/tab-state.ts` is the single, pure classifier every
-surface renders from — it explains the sweep's inputs, and never discards, closes, or writes anything.
+Chrome's tab strip cannot be decorated as a surface: `chrome.tabs` exposes no title or favicon *write*, and a
+discarded tab runs no renderer. Only the page favicon is reachable, so the strip gets a dim `z` mark on the way into
+sleep (see [Tab-strip sleep mark](#tab-strip-sleep-mark)) — nothing repaints the strip's row or label. Inside
+TabDorm, `classifyTabState()` in `src/core/tab-state.ts` is the single, pure classifier every surface renders
+from — it explains the sweep's inputs, and never discards, closes, or writes anything.
 
 | State | Condition | Indicator |
 | --- | --- | --- |
@@ -48,6 +49,18 @@ surface renders from — it explains the sweep's inputs, and never discards, clo
 Unknown clocks (a browser run before cold-start seeding) read as `awake` with no countdown — never as `asleep`.
 The toolbar action title reports both counts ("TabDorm — N of M tabs asleep"), so the state reads without a panel.
 Countdowns refresh every 30 s while a panel is open; that tick is a display cadence, not a suspension rule.
+
+## Tab-strip sleep mark
+
+Chrome's tab strip is browser UI. No extension API styles it, and `chrome.tabs` has no favicon or title *write* — so the strip's row background and label colour cannot be changed by TabDorm.
+
+The one legal repaint is the page's own favicon, which Chrome mirrors into the strip:
+
+- `paintSleepIcon()` (`core/sleep-icon.ts`) rewrites every `<link rel="icon">` in the document to an inline `data:` SVG of a dim double `z`, appends a marker link, and returns `painted` only when the document actually changed.
+- `discardTabSafe()` (`core/discard.ts`) is the single discard funnel, so the mark lands immediately before `chrome.tabs.discard` and is captured by the strip for the discarded tab. A discard that does not happen restores the page's own icons.
+- Waking the tab reloads its document, so the injected links disappear and the site's real favicon returns with no bookkeeping.
+- The optional `scripting` + `<all_urls>` grant gates the whole feature (`suspension.stripSleepIcon`, default on). Without the grant the paint is skipped without an error, and `chrome://` / Web Store tabs are treated as restricted.
+- Titles are never rewritten: `document.title` is page state, and dirtying it would break title-based tools.
 
 ## Sweep lifecycle
 
