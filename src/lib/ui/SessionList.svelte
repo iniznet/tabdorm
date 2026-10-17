@@ -208,13 +208,15 @@
           </div>
         {:else if item?.kind === 'row'}
           {@const session = item.session}
-          <div class="absolute left-0 w-full" style="transform:translateY({row.start}px)">
-            <div
-              class="relative flex h-14 items-center gap-2 border-b border-line/70 px-3 hover:bg-raised {menuFor ===
-              session.id
-                ? 'z-30'
-                : ''}"
-            >
+          <!--
+            The wrapper is itself a stacking context (absolute + transform), so the row's
+            z-index must live here: inside it, a child cannot climb above later siblings.
+          -->
+          <div
+            class="absolute left-0 w-full"
+            style="transform:translateY({row.start}px); z-index:{menuFor === session.id ? 30 : 0}"
+          >
+            <div class="relative flex h-14 items-center gap-2 border-b border-line/70 px-3 hover:bg-raised">
               <button class="min-w-0 flex-1 text-left" onclick={() => onSelect(session)}>
                 <p class="truncate text-[13px] text-ink">{session.name}</p>
                 <p class="num mt-0.5 flex items-center gap-1.5 text-[11px] text-dim">
