@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="TabDorm">
+  <title>TabDorm</title>
+  <!--
+    TabDorm mark: a real browser tab at rest - flat bottom, rounded top, and a
+    crescent of night sitting inside it. Two colours only, both from the panel
+    palette: the awake token for the tab body, the on-awake token for the crescent.
+    The crescent is a mask so the silhouette stays one clean shape at 16 px and
+    the mark reads on light and dark chrome without a second variant.
+  -->
+  <defs>
+    <mask id="td-crescent" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+      <rect width="24" height="24" fill="#000"/>
+      <circle cx="11.6" cy="12.4" r="5.9" fill="#fff"/>
+      <circle cx="14" cy="10.9" r="5.15" fill="#000"/>
+    </mask>
+  </defs>
+  <path d="M3.2 20.8V8.4a5.2 5.2 0 0 1 5.2-5.2h7.2a5.2 5.2 0 0 1 5.2 5.2V20.8Z" fill="#e9b46a"/>
+  <path d="M3.2 20.8V8.4a5.2 5.2 0 0 1 5.2-5.2h7.2a5.2 5.2 0 0 1 5.2 5.2V20.8Z" fill="#17120a" mask="url(#td-crescent)"/>
+</svg>

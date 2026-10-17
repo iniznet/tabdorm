@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 116 32" width="116" height="32" role="img" aria-label="TabDorm">
+  <title>TabDorm</title>
+  <!-- Horizontal lockup for dark surfaces. The wordmark stays live text in the
+       same platform UI stack the panel uses, so the lockup matches the product. -->
+  <defs>
+    <mask id="td-crescent-lockup-dark" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+      <rect width="24" height="24" fill="#000"/>
+      <circle cx="11.6" cy="12.4" r="5.9" fill="#fff"/>
+      <circle cx="14" cy="10.9" r="5.15" fill="#000"/>
+    </mask>
+  </defs>
+  <g transform="translate(0 4)">
+    <path d="M3.2 20.8V8.4a5.2 5.2 0 0 1 5.2-5.2h7.2a5.2 5.2 0 0 1 5.2 5.2V20.8Z" fill="#e9b46a"/>
+    <path d="M3.2 20.8V8.4a5.2 5.2 0 0 1 5.2-5.2h7.2a5.2 5.2 0 0 1 5.2 5.2V20.8Z" fill="#17120a" mask="url(#td-crescent-lockup-dark)"/>
+  </g>
+  <text x="33" y="22" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="19" font-weight="600" letter-spacing="-0.19" fill="#f4f1ea">TabDorm</text>
+</svg>

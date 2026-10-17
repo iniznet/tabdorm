@@ -10,13 +10,17 @@
     "build": "wxt build",
     "zip": "wxt zip",
     "compile": "tsc --noEmit",
-    "prepare": "wxt prepare"
+    "icons": "node scripts/build-icons.mjs",
+    "prepare": "wxt prepare",
+    "brand:preview": "node scripts/brand-preview.mjs",
+    "prebuild": "npm run icons"
   },
   "dependencies": {
     "@tanstack/svelte-virtual": "^3.13.39",
     "dexie": "^4.4.6"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/vite": "^4.3.3",
     "@types/chrome": "^0.3.4",
     "@wxt-dev/module-svelte": "^2.0.5",
