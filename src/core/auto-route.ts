@@ -33,6 +33,15 @@ export function matchesRule(url: string, rule: AutoRouteRule): boolean {
   return matcher !== null && matcher.test(url);
 }
 
+/** True when the URL matches any suspension whitelist pattern. One matcher, every caller. */
+export function matchesUrlPattern(url: string, patterns: readonly string[]): boolean {
+  for (const pattern of patterns) {
+    const matcher = ruleToRegExp(pattern);
+    if (matcher !== null && matcher.test(url)) return true;
+  }
+  return false;
+}
+
 /** Finds the first enabled rule whose pattern matches the committed URL. */
 export function matchRuleForUrl(url: string, rules: readonly AutoRouteRule[]): AutoRouteRule | null {
   for (const rule of rules) {

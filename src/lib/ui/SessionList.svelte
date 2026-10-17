@@ -5,6 +5,7 @@
   import { parseImportedSession } from '@/core/session-import';
   import { extractUrls } from '@/core/url-extract';
   import type { RestoreDestination, RestoreSelectionEntry } from '@/types/messages';
+  import Icon from '@/lib/ui/Icon.svelte';
   import type { UnifiedSession } from '@/types';
 
   interface Props {
@@ -38,22 +39,49 @@
       : sessions.filter((s) => s.name.toLowerCase().includes(query.trim().toLowerCase())),
   );
 
+  type Item =
+    | { kind: 'header'; key: string; label: string; count: number }
+    | { kind: 'row'; key: string; session: UnifiedSession };
+
+  const GROUP_ORDER: UnifiedSession['type'][] = ['user_saved', 'closed_window', 'auto_snapshot'];
+  const GROUP_LABEL: Record<UnifiedSession['type'], string> = {
+    user_saved: 'Saved by you',
+    closed_window: 'Closed windows',
+    auto_snapshot: 'Auto snapshots',
+  };
+
+  /**
+   * Snapshot kinds stay apart under their own heading — a hand-saved snapshot is
+   * not an hourly auto capture — and filtering only narrows rows inside a heading.
+   */
+  const items = $derived.by<Item[]>(() => {
+    const out: Item[] = [];
+    for (const type of GROUP_ORDER) {
+      const list = visible.filter((session) => session.type === type);
+      if (list.length === 0) continue;
+      out.push({ kind: 'header', key: 'h-' + type, label: GROUP_LABEL[type], count: list.length });
+      for (const session of list) out.push({ kind: 'row', key: 'r-' + session.id, session });
+    }
+    return out;
+  });
+
   const virtualizer = createVirtualizer({
     get count() {
-      return visible.length;
+      return items.length;
     },
     getScrollElement: () => scrollEl ?? null,
-    estimateSize: () => 68,
+    estimateSize: (index) => (items[index]?.kind === 'header' ? 26 : 56),
+    getItemKey: (index) => items[index]?.key ?? index,
     overscan: 8,
   });
 
   // Keep the virtualizer's item count in lockstep with filtered, paginated data.
   $effect(() => {
-    const count = visible.length;
+    const count = items.length;
     get(virtualizer).setOptions({ count });
   });
 
-  const rows = $derived($virtualizer.getVirtualItems());
+  const virtualItems = $derived($virtualizer.getVirtualItems());
   const total = $derived($virtualizer.getTotalSize());
 
   function formatWhenLong(ts: number): string {
@@ -95,23 +123,34 @@
   };
 </script>
 
-<div class="flex min-h-0 flex-1 flex-col">
-  <div class="relative mb-1">
-    <input
-      class="w-full rounded-md border border-line bg-overlay px-2.5 py-1 pr-7 text-xs text-ink placeholder:text-faint"
-      placeholder="Filter loaded sessions…"
-      bind:value={query}
-    />
-    {#if query !== ''}
-      <button
-        class="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs text-faint hover:text-ink"
-        aria-label="Clear session filter"
-        onclick={() => (query = '')}>✕</button
-      >
-    {/if}
-  </div>
-  <div class="mb-1 flex items-center gap-2">
-    <button class="text-[11px] text-dim hover:text-ink" onclick={() => importInput?.click()}>⤓ Import session file…</button>
+<div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+  <div class="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2">
+    <p class="num min-w-0 flex-1 text-[12px] text-dim">
+      <span class="font-semibold text-ink">{sessions.length}</span>
+      <span class="text-faint">saved</span>
+    </p>
+    <div class="flex h-7 w-[42%] min-w-24 items-center gap-1 rounded-md border border-line bg-overlay px-1.5 focus-within:border-line-strong">
+      <Icon name="search" size={12} class="shrink-0 text-faint" />
+      <input
+        class="min-w-0 flex-1 bg-transparent text-[12px] text-ink placeholder:text-faint focus:outline-none"
+        placeholder="Filter"
+        aria-label="Filter sessions"
+        bind:value={query}
+      />
+    </div>
+    <button
+      class="grid h-7 w-7 shrink-0 place-items-center rounded-md text-dim hover:bg-overlay hover:text-ink"
+      title="Import a session file"
+      aria-label="Import a session file"
+      onclick={() => importInput?.click()}><Icon name="upload" size={13} /></button
+    >
+    <button
+      class="grid h-7 w-7 shrink-0 place-items-center rounded-md text-dim hover:bg-overlay hover:text-ink"
+      title="Paste links"
+      aria-label="Paste links"
+      aria-expanded={pasteOpen}
+      onclick={() => (pasteOpen = !pasteOpen)}><Icon name="plus" size={13} /></button
+    >
     <input
       bind:this={importInput}
       type="file"
@@ -123,15 +162,17 @@
         e.currentTarget.value = '';
       }}
     />
-    <button class="text-[11px] text-dim hover:text-ink" onclick={() => (pasteOpen = !pasteOpen)}>⌨ Paste links…</button>
-    {#if importError !== null}
-      <span class="text-[11px] text-bad">{importError}</span>
-    {/if}
   </div>
+  {#if importError !== null}
+    <div class="flex items-start gap-1.5 border-b border-line px-3 py-1.5 text-[11px] text-bad" role="alert">
+      <Icon name="alert" size={12} class="mt-0.5 shrink-0" />
+      <p class="min-w-0 flex-1 break-words">{importError}</p>
+    </div>
+  {/if}
   {#if pasteOpen}
     <div class="mb-1 rounded-lg border border-line bg-overlay p-2">
       <textarea
-        class="h-20 w-full resize-y rounded-md border border-line bg-raised px-2 py-1 text-xs text-ink placeholder:text-faint"
+        class="h-20 w-full resize-y rounded-md border border-line bg-raised px-2 py-1 text-[12px] text-ink placeholder:text-faint"
         placeholder="Paste anything containing links — an email, markdown, a list of URLs…"
         bind:value={pasteText}></textarea>
       <div class="mt-1 flex items-center gap-2">
@@ -144,7 +185,7 @@
           onclick={() => { onOpenUrls(pastedUrls); pasteOpen = false; pasteText = ''; }}>Open as tabs</button
         >
         <button
-          class="rounded-md bg-accent px-2 py-1 text-[11px] font-medium text-white hover:bg-accent-strong disabled:opacity-50"
+          class="rounded-md bg-awake px-2 py-1 text-[11px] font-medium text-on-awake hover:bg-accent-strong disabled:opacity-50"
           disabled={pastedUrls.length === 0}
           onclick={() => { onSaveUrls(pastedUrls); pasteOpen = false; pasteText = ''; }}>Save as session</button
         >
@@ -154,41 +195,55 @@
       </div>
     </div>
   {/if}
-  <div bind:this={scrollEl} class="min-h-0 flex-1 overflow-y-auto rounded-lg border border-line bg-raised/60">
+  <div bind:this={scrollEl} class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
     <div class="relative w-full" style="height:{total}px">
-      {#each rows as row (row.key)}
-        {@const session = visible[row.index]}
-        {#if session}
-          <div class="absolute left-0 w-full px-1.5 pb-1.5" style="transform:translateY({row.start}px)">
-            <div
-              class="relative flex h-[60px] items-center justify-between gap-2 rounded-lg border border-line bg-overlay px-3 hover:border-faint/60">
+      {#each virtualItems as row (row.key)}
+        {@const item = items[row.index]}
+        {#if item?.kind === 'header'}
+          <div class="absolute left-0 w-full" style="transform:translateY({row.start}px)">
+            <div class="flex h-[26px] items-center gap-1.5 border-b border-line/60 bg-raised px-3">
+              <span class="min-w-0 flex-1 truncate text-[11px] font-medium text-dim">{item.label}</span>
+              <span class="num shrink-0 text-[10px] text-faint">{item.count}</span>
+            </div>
+          </div>
+        {:else if item?.kind === 'row'}
+          {@const session = item.session}
+          <!--
+            The wrapper is itself a stacking context (absolute + transform), so the row's
+            z-index must live here: inside it, a child cannot climb above later siblings.
+          -->
+          <div
+            class="absolute left-0 w-full"
+            style="transform:translateY({row.start}px); z-index:{menuFor === session.id ? 30 : 0}"
+          >
+            <div class="relative flex h-14 items-center gap-2 border-b border-line/70 px-3 hover:bg-raised">
               <button class="min-w-0 flex-1 text-left" onclick={() => onSelect(session)}>
-                <p class="truncate text-sm font-medium text-ink">{session.name}</p>
-                <p class="mt-0.5 flex items-center gap-1.5 text-[11px] text-dim">
-                  <span class="rounded px-1 py-0.5 text-[10px] font-medium uppercase {BADGE[session.type]}">{typeBadge(session.type)}</span>
-                  <span class="truncate">{formatWhenLong(session.timestamp)} · {session.windows.length} window(s) · {session.windows.reduce((n, w) => n + w.tabs.length, 0)} tabs</span>
+                <p class="truncate text-[13px] text-ink">{session.name}</p>
+                <p class="num mt-0.5 flex items-center gap-1.5 text-[11px] text-dim">
+                  <span class="rounded px-1 text-[10px] font-medium {BADGE[session.type]}">{typeBadge(session.type)}</span>
+                  <span class="truncate">{formatWhenLong(session.timestamp)} · {session.windows.reduce((n, w) => n + w.tabs.length, 0)} tabs</span>
                 </p>
               </button>
               <button
-                class="shrink-0 rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent-strong disabled:opacity-50"
+                class="shrink-0 rounded-md bg-awake px-2.5 py-1 text-[12px] font-semibold text-on-awake hover:bg-accent-strong disabled:opacity-40"
                 disabled={busyId !== null}
                 onclick={() => onRestore(session)}>
                 {busyId === session.id ? 'Restoring…' : 'Restore'}
               </button>
               <button
-                class="grid h-6 w-6 shrink-0 place-items-center rounded text-dim hover:bg-line hover:text-ink"
+                class="grid h-6 w-6 shrink-0 place-items-center rounded text-faint hover:bg-overlay hover:text-ink"
                 aria-label="Session actions"
                 aria-expanded={menuFor === session.id}
                 onclick={(e) => {
                   e.stopPropagation();
                   menuFor = menuFor === session.id ? null : session.id;
-                }}>⋯</button
+                }}><Icon name="dots" size={13} /></button
               >
               {#if menuFor === session.id}
                 <div
-                  class="absolute right-2 top-[52px] z-10 w-40 rounded-lg border border-line bg-raised py-1 shadow-xl shadow-black/40">
+                  class="absolute right-2 top-[46px] z-40 w-44 rounded-[10px] border border-line-strong bg-raised py-1 shadow-[0_10px_28px_rgb(0_0_0_/_0.55)]">
                   <button
-                    class="block w-full px-3 py-1.5 text-left text-xs text-dim hover:bg-overlay hover:text-ink"
+                    class="block w-full px-3 py-1.5 text-left text-[12px] text-dim hover:bg-overlay hover:text-ink"
                     onclick={(e) => {
                       e.stopPropagation();
                       menuFor = null;
@@ -196,7 +251,7 @@
                     }}>Details & rename</button
                   >
                   <button
-                    class="block w-full px-3 py-1.5 text-left text-xs text-dim hover:bg-overlay hover:text-ink"
+                    class="block w-full px-3 py-1.5 text-left text-[12px] text-dim hover:bg-overlay hover:text-ink"
                     onclick={(e) => {
                       e.stopPropagation();
                       menuFor = null;
@@ -204,7 +259,7 @@
                     }}>Export JSON</button
                   >
                   <button
-                    class="block w-full px-3 py-1.5 text-left text-xs text-bad hover:bg-overlay"
+                    class="block w-full px-3 py-1.5 text-left text-[12px] text-bad hover:bg-overlay"
                     onclick={(e) => {
                       e.stopPropagation();
                       menuFor = null;
@@ -219,19 +274,27 @@
       {/each}
     </div>
     {#if hasMore && query.trim() === ''}
-      <div class="p-2 text-center">
+      <div class="flex justify-center border-b border-line px-3 py-2">
         <button
-          class="w-full rounded-md border border-line py-1.5 text-xs text-dim hover:border-faint hover:text-ink disabled:opacity-50"
+          class="rounded-md px-2 py-1 text-[12px] text-dim hover:bg-overlay hover:text-ink disabled:opacity-40"
           disabled={loading}
-          onclick={onLoadMore}>Load more</button
+          onclick={onLoadMore}>{loading ? 'Loading…' : 'Load more'}</button
         >
       </div>
     {:else if visible.length === 0}
-      <p class="p-4 text-center text-xs text-faint">
-        {sessions.length === 0
-          ? 'No sessions yet. Use “Snapshot now” or close a window to capture one.'
-          : 'No loaded sessions match that filter.'}
-      </p>
+      <div class="px-4 py-6 text-center">
+        {#if sessions.length === 0}
+          <p class="text-[13px] text-ink">No snapshots yet.</p>
+          <p class="mt-1 text-[12px] text-dim">
+            Snapshot now captures every open tab so a bulk close is always reversible.
+          </p>
+        {:else}
+          <p class="text-[13px] text-ink">No session matches “{query.trim()}”.</p>
+          <button class="mt-2 text-[12px] text-awake underline underline-offset-2" onclick={() => (query = '')}>
+            Clear filter
+          </button>
+        {/if}
+      </div>
     {/if}
   </div>
 </div>

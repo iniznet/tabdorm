@@ -17,10 +17,10 @@
   ] as const;
 </script>
 
-<section id="focus" class="scroll-mt-6 rounded-xl border border-line bg-raised p-5">
-  <h2 class="text-xs font-semibold uppercase tracking-wider text-dim">Focus after close</h2>
-  <p class="mt-1 text-xs text-faint">Which tab becomes active when you close the tab you are looking at.</p>
-  <div class="mt-2 divide-y divide-line/60">
+<section id="focus" class="scroll-mt-20 border-t border-line pt-5">
+  <h2 class="text-[15px] font-semibold text-ink">Focus after close</h2>
+  <p class="mt-1 text-[12px] text-dim">Which tab becomes active when you close the tab you are looking at.</p>
+  <div class="mt-3 divide-y divide-line/70">
     <SelectField
       value={config.focus.onActiveTabClosed}
       label="When the active tab is closed"

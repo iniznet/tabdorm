@@ -11,10 +11,10 @@
   let { config, onChange }: Props = $props();
 </script>
 
-<section id="restoration" class="scroll-mt-6 rounded-xl border border-line bg-raised p-5">
-  <h2 class="text-xs font-semibold uppercase tracking-wider text-dim">Restoration</h2>
-  <p class="mt-1 text-xs text-faint">How sessions are replayed when you hit Restore.</p>
-  <div class="mt-2 divide-y divide-line/60">
+<section id="restoration" class="scroll-mt-20 border-t border-line pt-5">
+  <h2 class="text-[15px] font-semibold text-ink">Restoration</h2>
+  <p class="mt-1 text-[12px] text-dim">How sessions are replayed when you hit Restore.</p>
+  <div class="mt-3 divide-y divide-line/70">
     <NumberField
       value={config.restoration.batchSize}
       label="Batch size"

@@ -102,6 +102,35 @@ export function pruneTabStats(): Promise<number> {
  * Registers visit tracking. MUST run synchronously inside defineBackground() so a
  * tab created or activated during worker spin-up is still recorded.
  */
+/**
+ * Fills in records for tabs that already existed when this feature shipped.
+ * Chrome's own `tab.lastAccessed` is a real clock, so those tabs get a true age
+ * instead of "age unknown"; `firstSeen` falls back to the same stamp because the
+ * open time was never observed. Existing records are never overwritten.
+ */
+export function seedTabStats(): Promise<number> {
+  return serialize(async () => {
+    const stats = await getTabStats();
+    const tabs = await chrome.tabs.query({});
+    const now = Date.now();
+    let added = 0;
+    for (const tab of tabs) {
+      if (tab.id === undefined) continue;
+      const key = String(tab.id);
+      if (stats[key] !== undefined) continue;
+      const accessed = typeof tab.lastAccessed === 'number' && tab.lastAccessed > 0 ? tab.lastAccessed : 0;
+      stats[key] = { firstSeen: accessed > 0 ? accessed : now, lastActive: accessed };
+      added += 1;
+    }
+    if (added > 0) await chrome.storage.local.set({ [STATS_KEY]: stats });
+    return added;
+  });
+}
+
+/**
+ * Registers visit tracking. MUST run synchronously inside defineBackground() so a
+ * tab created or activated during worker spin-up is still recorded.
+ */
 export function initTabStats(): void {
   chrome.tabs.onCreated.addListener((tab) => {
     if (tab.id === undefined) return;

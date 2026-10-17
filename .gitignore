@@ -4,3 +4,6 @@ node_modules/
 stats.html
 .env
 .DS_Store
+
+# generated brand contact sheets (npm run brand:preview)
+/preview
