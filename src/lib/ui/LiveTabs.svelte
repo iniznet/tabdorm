@@ -330,19 +330,28 @@
         {:else if item?.kind === 'row'}
           {@const tab = item.row}
           {@const state = stateFor(tab)}
+          {@const asleep = state.kind === 'asleep'}
           <div class="absolute left-0 w-full" style="transform:translateY({entry.start}px)">
             <div
               class="group flex h-12 items-start gap-2 border-b border-line/70 px-3 py-2 {tab.active
                 ? 'bg-awake/5'
                 : 'hover:bg-raised'}"
             >
-              <span class="mt-0.5 shrink-0 {STATE_TONE[state.kind]}" title={state.label}>
+              <span
+                class="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded {asleep
+                  ? 'bg-asleep/15 text-asleep'
+                  : STATE_TONE[state.kind]}"
+                title={state.label}
+              >
                 <Icon name={STATE_ICON[state.kind]} size={13} />
               </span>
               <div class="min-w-0 flex-1">
-                <p class="truncate text-[13px] {tab.active ? 'font-semibold text-ink' : 'text-ink'}" title={tab.url}>{tab.title}</p>
+                <p
+                  class="truncate text-[13px] {tab.active ? 'font-semibold text-ink' : asleep ? 'text-dim' : 'text-ink'}"
+                  title={tab.url}>{tab.title}</p
+                >
                 <p class="num mt-0.5 flex items-center gap-1.5 text-[11px] text-dim">
-                  <span class="min-w-0 truncate">{HOSTNAME(tab.url)}</span>
+                  <span class="min-w-0 truncate {asleep ? 'text-faint' : ''}">{HOSTNAME(tab.url)}</span>
                   <span class="text-line-strong">·</span>
                   <span class="{STATE_TONE[state.kind]} shrink-0">{state.label}</span>
                   {#if tab.pinned && state.protection !== 'pinned'}
