@@ -1,5 +1,6 @@
 import { runSweepOnce, syncSweepAlarm, SWEEP_ALARM } from '@/core/suspension';
 import { collapseIdleGroups, initGroupCollapse } from '@/core/group-collapse';
+import { initCloseFocus } from '@/core/close-focus-tabs';
 import { ensureColdStartSeeded, forgetActivity, touchActivity } from '@/core/activity';
 import { updateAsleepBadge } from '@/core/badge';
 import { initContextMenus, suspendOtherTabs, toggleWhitelistForTab } from '@/core/context-menus';
@@ -38,6 +39,7 @@ export default defineBackground(() => {
     if (alarm.name === SWEEP_ALARM) void sweepNow();
   });
   initGroupCollapse();
+  initCloseFocus();
   registerSnapshotAlarmListener(shadowTree);
   registerActivityTracking();
   registerBackgroundMessageHandler((request, sender) => handleMessage(request, shadowTree, sender));

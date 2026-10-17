@@ -11,6 +11,12 @@ export interface AutoRouteRule {
   autoCollapse?: boolean;
 }
 
+/**
+ * How the close of the active tab is handled: Chromium's neighbouring tab, or a
+ * tab from the window's activation history (optionally restricted to another group).
+ */
+export type CloseFocusMode = 'browser' | 'previous-tab' | 'previous-other-group';
+
 /** Fully-typed configuration. Every timer, threshold, and rule lives here — zero hardcoding. */
 export interface TabDormConfig {
   schemaVersion: number;
@@ -49,6 +55,14 @@ export interface TabDormConfig {
       bucketLonelyTabs: boolean;
       rules: AutoRouteRule[];
     };
+  };
+  focus: {
+    /** Which tab becomes active when the tab you are looking at is closed. */
+    onActiveTabClosed: CloseFocusMode;
+    /** Per-window activation-history depth the restore may walk back through. */
+    historyDepth: number;
+    /** Grace window (ms) for correcting a late browser-chosen activation; 0 disables it. */
+    restoreSettleMs: number;
   };
   restoration: {
     batchSize: number;

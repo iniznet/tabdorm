@@ -4,6 +4,7 @@
   import Section from '@/lib/ui/controls/Section.svelte';
   import SuspensionOptions from '@/lib/ui/options/SuspensionOptions.svelte';
   import GroupsOptions from '@/lib/ui/options/GroupsOptions.svelte';
+  import FocusOptions from '@/lib/ui/options/FocusOptions.svelte';
   import RestorationOptions from '@/lib/ui/options/RestorationOptions.svelte';
   import SnapshotsOptions from '@/lib/ui/options/SnapshotsOptions.svelte';
   import DangerZone from '@/lib/ui/options/DangerZone.svelte';
@@ -48,6 +49,7 @@
   const NAV = [
     ['suspension', 'Suspension'],
     ['groups', 'Tab groups'],
+    ['focus', 'Focus after close'],
     ['restoration', 'Restoration'],
     ['snapshots', 'Snapshots'],
     ['data', 'Data & backup'],
@@ -84,6 +86,7 @@
     <div class="flex flex-col gap-4">
       <SuspensionOptions {config} onChange={update} />
       <GroupsOptions {config} onChange={update} />
+      <FocusOptions {config} onChange={update} />
       <RestorationOptions {config} onChange={update} />
       <SnapshotsOptions {config} onChange={update} />
       <Section id="data" title="Data & backup" description="Destructive operations. Export first — there is no undo.">

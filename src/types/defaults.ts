@@ -1,4 +1,9 @@
-import { VALID_GROUP_COLORS, type AutoRouteRule, type TabDormConfig } from './config';
+import {
+  VALID_GROUP_COLORS,
+  type AutoRouteRule,
+  type CloseFocusMode,
+  type TabDormConfig,
+} from './config';
 
 /**
  * Safe defaults for every configurable knob. Nothing in the codebase may hardcode
@@ -36,6 +41,11 @@ export const DEFAULT_TAB_DORM_CONFIG: TabDormConfig = {
       rules: [],
     },
   },
+  focus: {
+    onActiveTabClosed: 'previous-other-group',
+    historyDepth: 8,
+    restoreSettleMs: 300,
+  },
   restoration: {
     batchSize: 10,
     delayBetweenTabsMs: 50,
@@ -58,6 +68,8 @@ const NUMERIC_BOUNDS = {
   sweepIntervalMinutes: { min: 1, max: 1_440 },
   wakeCooldownMs: { min: 0, max: 3_600_000 },
   autoCollapseOnIdleMinutes: { min: 0, max: 10_080 },
+  historyDepth: { min: 1, max: 25 },
+  restoreSettleMs: { min: 0, max: 2_000 },
   batchSize: { min: 1, max: 100 },
   delayBetweenTabsMs: { min: 0, max: 5_000 },
   intervalMinutes: { min: 1, max: 1_440 },
@@ -83,6 +95,18 @@ function readStringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')
     : [];
+}
+
+const CLOSE_FOCUS_MODES: readonly CloseFocusMode[] = [
+  'browser',
+  'previous-tab',
+  'previous-other-group',
+];
+
+function readCloseFocusMode(value: unknown): CloseFocusMode {
+  return typeof value === 'string' && (CLOSE_FOCUS_MODES as readonly string[]).includes(value)
+    ? (value as CloseFocusMode)
+    : DEFAULT_TAB_DORM_CONFIG.focus.onActiveTabClosed;
 }
 
 function isGroupColor(value: unknown): value is TabDormConfig['suspension']['exemptions']['protectedGroupColors'][number] {
@@ -120,6 +144,7 @@ export function resolveConfig(raw: unknown): TabDormConfig {
   const ex = readObject(s['exemptions']);
   const g = readObject(source['groups']);
   const r = readObject(g['routing']);
+  const focus = readObject(source['focus']);
   const rest = readObject(source['restoration']);
   const snap = readObject(source['snapshots']);
   const b = NUMERIC_BOUNDS;
@@ -160,6 +185,11 @@ export function resolveConfig(raw: unknown): TabDormConfig {
         bucketLonelyTabs: readBool(r['bucketLonelyTabs'], DEFAULT_TAB_DORM_CONFIG.groups.routing.bucketLonelyTabs),
         rules: readRules(r['rules']),
       },
+    },
+    focus: {
+      onActiveTabClosed: readCloseFocusMode(focus['onActiveTabClosed']),
+      historyDepth: clampNumber(focus['historyDepth'], DEFAULT_TAB_DORM_CONFIG.focus.historyDepth, b.historyDepth.min, b.historyDepth.max),
+      restoreSettleMs: clampNumber(focus['restoreSettleMs'], DEFAULT_TAB_DORM_CONFIG.focus.restoreSettleMs, b.restoreSettleMs.min, b.restoreSettleMs.max),
     },
     restoration: {
       batchSize: clampNumber(rest['batchSize'], DEFAULT_TAB_DORM_CONFIG.restoration.batchSize, b.batchSize.min, b.batchSize.max),

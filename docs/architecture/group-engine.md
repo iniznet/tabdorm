@@ -20,6 +20,15 @@ Three collapse sources exist, and **all of them funnel through a single reaction
 
 On every collapse *transition*, if `groups.suspendOnGroupCollapse` is enabled, the collapsed group’s inactive tabs are run through the **same forced-idle decision matrix** (idle math short-circuited, every other exemption intact): audible, whitelisted, and protected-group tabs keep their shields; the focused tab is skipped.
 
+## Focus restore on close
+
+Chromium activates the *neighbouring* tab when you close the active one, and that neighbour is usually another member of the same group — so a "close and move on" gesture lands you sideways.
+
+- The worker keeps a per-window **activation history** (most recent first) in `chrome.storage.session`, recording the group each tab was in when it was activated; `tabs.onUpdated` re-stamps the group when a tab is routed afterwards.
+- On `tabs.onRemoved` for the active tab of a window, `pickRestoreTarget()` (`src/core/close-focus.ts`, pure) chooses the replacement from that history. Window closes (`isWindowClosing`) and untracked tabs never trigger a restore.
+- `focus.onActiveTabClosed` selects the rule: `browser` (do nothing), `previous-tab` (the tab you came from), or `previous-other-group` (the most recent tab whose group differs from the closed tab's — the default; it stays out of the closed tab's group, and does nothing when every remembered tab shares that group).
+- `focus.historyDepth` caps how far back the restore may walk. `focus.restoreSettleMs` is a grace window: if Chromium activates its own pick *after* ours, the restore is re-applied once inside that window. `0` disables the correction.
+
 ## Implementation notes
 
 - `tabGroups.onUpdated` delivers no changeInfo in @types/chrome 0.3.x, so collapse transitions are detected with a seeded state map (`groupId → collapsed`) instead of change events.
