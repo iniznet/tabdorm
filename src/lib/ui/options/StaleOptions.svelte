@@ -10,10 +10,10 @@
   let { config, onChange }: Props = $props();
 </script>
 
-<section id="stale" class="scroll-mt-6 rounded-xl border border-line bg-raised p-5">
-  <h2 class="text-xs font-semibold uppercase tracking-wider text-dim">Stale tabs</h2>
-  <p class="mt-1 text-xs text-faint">TabDorm remembers when you last looked at each tab, so the side panel can list what you have been collecting and not revisiting.</p>
-  <div class="mt-2 divide-y divide-line/60">
+<section id="stale" class="scroll-mt-20 border-t border-line pt-5">
+  <h2 class="text-[15px] font-semibold text-ink">Stale tabs</h2>
+  <p class="mt-1 text-[12px] text-dim">TabDorm remembers when you last looked at each tab, so the side panel can list what you have been collecting and not revisiting.</p>
+  <div class="mt-3 divide-y divide-line/70">
     <NumberField
       value={config.stale.staleAfterDays}
       label="Flag a tab as stale after"

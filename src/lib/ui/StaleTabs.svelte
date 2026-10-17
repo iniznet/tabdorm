@@ -4,12 +4,13 @@
   import { getConfig } from '@/core/config-store';
   import { sendToBackground } from '@/core/messaging';
   import { describeCloseOutcome, parseCloseOutcome } from '@/core/close-duplicates';
+  import Icon from '@/lib/ui/Icon.svelte';
 
   const GROUP_NONE = -1;
 
   let rows: StaleRow[] = $state([]);
   let threshold: number = $state(0);
-  let open: boolean = $state(false);
+  let ready: boolean = $state(false);
   let busy: boolean = $state(false);
   let filter: string = $state('');
   let notice: string = $state('');
@@ -25,6 +26,14 @@
           (row.title + ' ' + row.url + ' ' + (row.groupTitle ?? '')).toLowerCase().includes(filter.trim().toLowerCase()),
         ),
   );
+
+  function hostOf(url: string): string {
+    try {
+      return new URL(url).host.replace(/^www\./, '');
+    } catch {
+      return '';
+    }
+  }
 
   async function scan(): Promise<void> {
     const [tabs, groups, stats, config] = await Promise.all([
@@ -59,6 +68,7 @@
           lastActive: stat?.lastActive ?? 0,
         };
       });
+    ready = true;
   }
 
   $effect(() => {
@@ -121,81 +131,113 @@
     await chrome.windows.update(row.windowId, { focused: true }).catch(() => undefined);
     await scan();
   }
+
+  function openOptions(): void {
+    void chrome.runtime.openOptionsPage();
+  }
 </script>
 
-<div class="rounded-md border border-line bg-raised/60">
-  <button
-    class="flex w-full items-center gap-2 px-2 py-1.5 text-left"
-    onclick={() => (open = !open)}
-    aria-expanded={open}
-    aria-controls="stale-tabs-list">
-    <span class="min-w-0 flex-1 truncate text-xs font-semibold {staleRows.length > 0 ? 'text-warn' : 'text-dim'}">
-      {staleRows.length} stale of {rows.length} tab{rows.length === 1 ? '' : 's'}
-      {#if threshold > 0}<span class="font-normal text-faint">· {threshold}d+</span>{/if}
-    </span>
-    <span class="text-[10px] text-faint">{open ? '▾' : '▸'}</span>
-  </button>
-
-  {#if open}
-    <div class="border-t border-line/60 px-2 py-1.5">
-      <div class="flex flex-wrap items-center gap-1.5">
-        <button
-          class="rounded-md border border-line px-2 py-1 text-[10px] font-medium text-dim hover:border-faint hover:text-ink disabled:opacity-40"
-          disabled={busy || closable.length === 0}
-          onclick={() => void closeStale(true)}>Snapshot + close {closable.length}</button
-        >
-        <button
-          class="rounded-md border border-bad/40 px-2 py-1 text-[10px] font-medium text-bad hover:bg-bad/10 disabled:opacity-40"
-          disabled={busy || closable.length === 0}
-          onclick={() => void closeStale(false)}>Close {closable.length}</button
-        >
-        <input
-          class="min-w-0 flex-1 rounded-md border border-line bg-overlay px-2 py-1 text-[10px] text-ink placeholder:text-faint"
-          placeholder="Filter…"
-          bind:value={filter}
-        />
-      </div>
-
-      {#if notice !== ''}
-        <p class="mt-1.5 rounded-md bg-overlay px-2 py-1 text-[10px] text-dim" role="status">{notice}</p>
+<div class="flex min-h-0 flex-1 flex-col">
+  <div class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-line px-3 py-2">
+    <p class="num min-w-0 flex-1 text-[12px] text-dim">
+      <span class="font-semibold {staleRows.length > 0 ? 'text-stale' : 'text-ink'}">{staleRows.length}</span>
+      <span class="text-faint">stale of</span>
+      {rows.length}
+      {#if threshold > 0}
+        <span class="text-faint">· {threshold}d+</span>
+      {:else}
+        <span class="text-faint">· flagging off</span>
       {/if}
+    </p>
+    <div class="flex h-7 min-w-0 flex-1 basis-28 items-center gap-1 rounded-md border border-line bg-overlay px-1.5 focus-within:border-line-strong">
+      <Icon name="search" size={12} class="shrink-0 text-faint" />
+      <input
+        class="min-w-0 flex-1 bg-transparent text-[12px] text-ink placeholder:text-faint focus:outline-none"
+        placeholder="Filter"
+        aria-label="Filter stale tabs"
+        bind:value={filter}
+      />
+    </div>
+  </div>
 
-      <ul class="mt-1.5 flex max-h-56 flex-col gap-0.5 overflow-y-auto" id="stale-tabs-list">
-        {#each visible as row (row.tabId)}
-          <li
-            class="group flex h-6 items-center gap-1.5 rounded px-1 text-[11px] {isStale(row, threshold, now)
-              ? 'bg-warn/10'
-              : ''} hover:bg-overlay"
-          >
-            <span class="w-16 shrink-0 tabular-nums {isStale(row, threshold, now) ? 'text-warn' : 'text-faint'}"
-              >{ageLabel(row.lastActive, now)}</span
-            >
-            <button
-              class="min-w-0 flex-1 truncate text-left {row.active ? 'font-semibold text-ink' : 'text-dim'} hover:text-ink"
-              title={row.url}
-              onclick={() => void focusTab(row)}>{row.title}</button
-            >
-            {#if row.groupTitle !== null}
-              <span class="shrink-0 max-w-20 truncate rounded bg-overlay px-1 text-[9px] text-faint" title="Tab group"
-                >{row.groupTitle}</span
-              >
+  {#if notice !== ''}
+    <div class="flex items-start gap-1.5 border-b border-line px-3 py-1.5 text-[11px] text-dim" role="status">
+      <Icon name="check" size={12} class="mt-0.5 shrink-0 text-good" />
+      <p class="min-w-0 flex-1 break-words">{notice}</p>
+    </div>
+  {/if}
+
+  <ul class="min-h-0 flex-1 overflow-y-auto" aria-label="Tabs by age">
+    {#each visible as row (row.tabId)}
+      {@const stale = isStale(row, threshold, now)}
+      <li class="group flex items-start gap-2 border-b border-line/70 px-3 py-2 hover:bg-raised">
+        <span class="mt-0.5 shrink-0 {row.discarded ? 'text-asleep' : stale ? 'text-stale' : 'text-faint'}">
+          <Icon name={row.discarded ? 'moon' : row.audible ? 'speaker' : row.pinned ? 'pin' : 'clock'} size={13} />
+        </span>
+        <button class="min-w-0 flex-1 text-left" title={row.url} onclick={() => void focusTab(row)}>
+          <span class="block truncate text-[13px] {row.active ? 'font-semibold text-ink' : 'text-ink'}">{row.title}</span>
+          <span class="num mt-0.5 flex items-center gap-1.5 text-[11px] text-dim">
+            <span class={stale ? 'text-stale' : 'text-faint'}>{ageLabel(row.lastActive, now)}</span>
+            {#if hostOf(row.url) !== ''}
+              <span class="text-line-strong">·</span>
+              <span class="min-w-0 truncate">{hostOf(row.url)}</span>
             {/if}
-            {#if row.discarded}<span class="shrink-0 text-[9px]" title="Asleep">💤</span>{/if}
-            {#if row.pinned}<span class="shrink-0 text-[9px]" title="Pinned">📌</span>{/if}
-            {#if row.audible}<span class="shrink-0 text-[9px]" title="Playing audio">🔊</span>{/if}
-            <button
-              class="shrink-0 rounded px-1 text-[10px] text-faint opacity-0 group-hover:opacity-100 hover:bg-line hover:text-bad"
-              title="Close tab"
-              onclick={() => void closeTabs([row.tabId], false)}>✕</button
-            >
-          </li>
-        {/each}
-      </ul>
-      {#if visible.length === 0}
-        <p class="p-2 text-center text-[10px] text-faint">
-          {rows.length === 0 ? 'No open tabs.' : 'No tab matches that filter.'}
-        </p>
+            {#if row.groupTitle !== null}
+              <span class="text-line-strong">·</span>
+              <span class="min-w-0 truncate text-faint">{row.groupTitle}</span>
+            {/if}
+            {#if row.pinned}<span class="text-line-strong">·</span><span class="text-faint">pinned</span>{/if}
+            {#if row.audible}<span class="text-line-strong">·</span><span class="text-faint">audio</span>{/if}
+          </span>
+        </button>
+        <button
+          class="shrink-0 rounded p-0.5 text-faint opacity-0 transition-opacity duration-120 hover:text-bad focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-30"
+          title="Close tab"
+          aria-label="Close {row.title}"
+          disabled={busy}
+          onclick={() => void closeTabs([row.tabId], false)}><Icon name="close" size={13} /></button
+        >
+      </li>
+    {/each}
+  </ul>
+
+  {#if !ready}
+    <p class="px-3 py-4 text-center text-[12px] text-faint">Reading tabs…</p>
+  {:else if visible.length === 0}
+    <div class="px-4 py-6 text-center">
+      {#if rows.length === 0}
+        <p class="text-[13px] text-ink">No open tabs.</p>
+        <p class="mt-1 text-[12px] text-dim">Open something and it shows up here with its age.</p>
+      {:else if filter.trim() !== ''}
+        <p class="text-[13px] text-ink">No tab matches “{filter.trim()}”.</p>
+        <button class="mt-2 text-[12px] text-awake underline underline-offset-2" onclick={() => (filter = '')}>Clear filter</button>
+      {:else if threshold === 0}
+        <p class="text-[13px] text-ink">Stale flagging is off.</p>
+        <p class="mt-1 text-[12px] text-dim">Ages are tracked, so nothing is hidden — turn flagging on to rank them.</p>
+        <button class="mt-2 text-[12px] text-awake underline underline-offset-2" onclick={openOptions}>Open settings</button>
+      {:else}
+        <p class="text-[13px] text-ink">Nothing stale.</p>
+        <p class="mt-1 text-[12px] text-dim">No tab has gone {threshold} days without a visit. Every row below is younger.</p>
       {/if}
+    </div>
+  {/if}
+
+  {#if closable.length > 0}
+    <div class="rise flex shrink-0 flex-wrap items-center gap-2 border-t border-line bg-raised px-3 py-2 shadow-[0_-8px_24px_rgb(0_0_0_/_0.45)]">
+      <p class="num min-w-0 flex-1 text-[11px] text-dim">
+        <span class="font-semibold text-ink">{closable.length}</span> closable
+        <span class="text-faint">· pinned, active, audio kept</span>
+      </p>
+      <button
+        class="rounded-md bg-awake px-2.5 py-1.5 text-[12px] font-semibold text-on-awake hover:bg-accent-strong disabled:opacity-40"
+        disabled={busy}
+        onclick={() => void closeStale(true)}>{busy ? 'Working…' : 'Snapshot + close'}</button
+      >
+      <button
+        class="rounded-md border border-bad/45 px-2.5 py-1.5 text-[12px] font-medium text-bad hover:bg-bad/10 disabled:opacity-40"
+        disabled={busy}
+        onclick={() => void closeStale(false)}>Close</button
+      >
     </div>
   {/if}
 </div>

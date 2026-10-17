@@ -6,6 +6,7 @@
   import Search from '@/lib/ui/Search.svelte';
   import Duplicates from '@/lib/ui/Duplicates.svelte';
   import StaleTabs from '@/lib/ui/StaleTabs.svelte';
+  import Icon from '@/lib/ui/Icon.svelte';
   import { pageSessions, deleteSession as deleteSessionById, renameSession, putSession } from '@/core/db';
   import { contentHashOf } from '@/core/hash';
   import { sendToBackground } from '@/core/messaging';
@@ -20,10 +21,20 @@
   let selected: UnifiedSession | null = $state(null);
   let busyId: string | null = $state(null);
   let notice: string = $state('');
+  let noticeKind: 'info' | 'bad' = $state('info');
   let tmsCount: number = $state(0);
   let migrating: boolean = $state(false);
   let tabCount: number = $state(0);
   let asleepCount: number = $state(0);
+  let view: 'tabs' | 'stale' | 'dups' | 'sessions' | 'sets' = $state('tabs');
+
+  const views = [
+    { id: 'tabs', label: 'Tabs' },
+    { id: 'stale', label: 'Stale' },
+    { id: 'dups', label: 'Dups' },
+    { id: 'sessions', label: 'Sessions' },
+    { id: 'sets', label: 'Sets' },
+  ] as const;
 
   /** Battery reporting: UI surfaces have DOM getBattery access the SW may lack. */
   $effect(() => {
@@ -63,13 +74,17 @@
     };
   });
 
+  function say(message: string, kind: 'info' | 'bad' = 'info'): void {
+    notice = message;
+    noticeKind = kind;
+  }
+
   async function migrateTms(): Promise<void> {
     migrating = true;
     try {
       const res = await sendToBackground({ type: 'migrateTms' });
-      notice = res.ok
-        ? `Migrated ${String((res.payload as { migrated?: number })?.migrated ?? 0)} Marvellous Suspender tab(s).`
-        : `Migration failed: ${res.error}`;
+      if (res.ok) say(`Migrated ${String((res.payload as { migrated?: number })?.migrated ?? 0)} Marvellous Suspender tab(s).`);
+      else say(`Migration failed: ${res.error}`, 'bad');
       await scanTms();
     } finally {
       migrating = false;
@@ -85,7 +100,7 @@
       nextCursor = page.nextCursor;
       hasMore = page.hasMore;
     } catch (error) {
-      notice = error instanceof Error ? error.message : String(error);
+      say(error instanceof Error ? error.message : String(error), 'bad');
     } finally {
       loading = false;
     }
@@ -106,13 +121,15 @@
 
   async function snapshotNow(): Promise<void> {
     const res = await sendToBackground({ type: 'snapshotNow' });
-    notice = res.ok ? 'Snapshot saved.' : `Snapshot failed: ${res.error}`;
+    if (res.ok) say('Snapshot saved.');
+    else say(`Snapshot failed: ${res.error}`, 'bad');
     await refresh();
   }
 
   async function suspendInactive(): Promise<void> {
     const res = await sendToBackground({ type: 'runSweep' });
-    notice = res.ok ? `Suspended ${String((res.payload as { discarded?: number })?.discarded ?? 0)} tab(s).` : `Sweep failed: ${res.error}`;
+    if (res.ok) say(`Suspended ${String((res.payload as { discarded?: number })?.discarded ?? 0)} tab(s).`);
+    else say(`Sweep failed: ${res.error}`, 'bad');
     await refresh();
   }
 
@@ -131,7 +148,8 @@
         selection: options?.selection,
       });
       const created = res.ok ? String((res.payload as { tabsCreated?: number } | undefined)?.tabsCreated ?? 0) : '0';
-      notice = res.ok ? 'Restored ' + created + ' tab(s).' : 'Restore failed: ' + res.error;
+      if (res.ok) say('Restored ' + created + ' tab(s).');
+      else say('Restore failed: ' + res.error, 'bad');
     } finally {
       busyId = null;
     }
@@ -140,7 +158,8 @@
   async function openPastedUrls(urls: string[]): Promise<void> {
     const res = await sendToBackground({ type: 'openUrlList', urls });
     const created = res.ok ? String((res.payload as { tabsCreated?: number } | undefined)?.tabsCreated ?? urls.length) : '0';
-    notice = res.ok ? 'Opening ' + created + ' tab(s)…' : 'Open failed: ' + res.error;
+    if (res.ok) say('Opening ' + created + ' tab(s)…');
+    else say('Open failed: ' + res.error, 'bad');
   }
 
   async function savePastedUrls(urls: string[]): Promise<void> {
@@ -153,14 +172,14 @@
       contentHash: contentHashOf(windows),
       windows,
     });
-    notice = 'Saved ' + urls.length + ' link(s) as a session.';
+    say('Saved ' + urls.length + ' link(s) as a session.');
     await refresh();
   }
 
   async function removeSession(session: UnifiedSession): Promise<void> {
     if (!window.confirm(`Delete “${session.name}”? This cannot be undone.`)) return;
     await deleteSessionById(session.id);
-    notice = 'Session deleted.';
+    say('Session deleted.');
     await refresh();
   }
 
@@ -169,9 +188,9 @@
       await renameSession(session.id, name);
       sessions = sessions.map((s) => (s.id === session.id ? { ...s, name } : s));
       if (selected?.id === session.id) selected = { ...selected, name };
-      notice = 'Session renamed.';
+      say('Session renamed.');
     } catch (error) {
-      notice = error instanceof Error ? error.message : String(error);
+      say(error instanceof Error ? error.message : String(error), 'bad');
     }
   }
 
@@ -180,46 +199,93 @@
   }
 </script>
 
-<div class="flex h-full flex-col gap-2 p-2.5 text-sm">
-  <header class="flex items-center gap-2">
-    <h1 class="text-base font-semibold tracking-tight text-ink">TabDorm</h1>
-    <span
-      class="rounded-full border px-2 py-0.5 text-[10px] {asleepCount > 0
-        ? 'border-good/40 text-good'
-        : 'border-line text-faint'}"
-      title="Tabs natively discarded in this window">{asleepCount}/{tabCount} asleep</span
-    >
-    <button
-      class="ml-auto grid h-7 w-7 place-items-center rounded-md border border-line text-dim hover:border-faint hover:text-ink"
-      aria-label="Open settings"
-      title="Settings"
-      onclick={openSettings}>⚙</button
-    >
+<div class="flex h-full min-h-0 flex-col bg-surface text-ink">
+  <header class="sticky top-0 z-20 shrink-0 border-b border-line bg-raised/95 backdrop-blur-sm">
+    <div class="flex items-center gap-2 px-3 pt-2.5 pb-2">
+      <h1 class="text-[15px] font-semibold text-ink">TabDorm</h1>
+      <span
+        class="num inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[11px] {asleepCount > 0
+          ? 'border-asleep/35 text-asleep'
+          : 'border-line text-faint'}"
+        title="Tabs natively discarded in this window"
+      >
+        <Icon name="moon" size={11} />
+        {asleepCount}/{tabCount}
+      </span>
+      <div class="ml-auto flex items-center gap-0.5">
+        <button
+          class="grid h-7 w-7 place-items-center rounded-md text-dim transition-colors duration-120 hover:bg-overlay hover:text-ink"
+          title="Snapshot now"
+          aria-label="Snapshot now"
+          onclick={() => void snapshotNow()}><Icon name="camera" /></button
+        >
+        <button
+          class="grid h-7 w-7 place-items-center rounded-md text-dim transition-colors duration-120 hover:bg-overlay hover:text-ink"
+          title="Suspend inactive tabs"
+          aria-label="Suspend inactive tabs"
+          onclick={() => void suspendInactive()}><Icon name="moon" /></button
+        >
+        <button
+          class="grid h-7 w-7 place-items-center rounded-md text-dim transition-colors duration-120 hover:bg-overlay hover:text-ink"
+          title="Settings"
+          aria-label="Settings"
+          onclick={openSettings}><Icon name="sliders" /></button
+        >
+      </div>
+    </div>
+
+    <div class="px-3 pb-2">
+      <Search onOpenSession={(s) => {
+        selected = s;
+        view = 'sessions';
+      }} />
+    </div>
+
+    <nav class="-mx-px flex items-stretch gap-0 overflow-x-auto px-3" aria-label="Views">
+      {#each views as item (item.id)}
+        <button
+          class="relative shrink-0 px-2.5 pb-1.5 pt-1 text-[12px] font-medium transition-colors duration-120 {view === item.id
+            ? 'text-ink'
+            : 'text-dim hover:text-ink'}"
+          aria-current={view === item.id ? 'page' : undefined}
+          onclick={() => {
+            view = item.id;
+            if (item.id !== 'sessions') selected = null;
+          }}
+        >
+          {item.label}
+          {#if view === item.id}
+            <span class="absolute inset-x-1.5 -bottom-px h-px bg-awake"></span>
+          {/if}
+        </button>
+      {/each}
+    </nav>
   </header>
 
-  <div class="grid grid-cols-2 gap-2">
-    <button
-      class="rounded-md bg-accent px-2 py-1.5 text-xs font-medium text-white hover:bg-accent-strong disabled:opacity-50"
-      onclick={() => void snapshotNow()}>Snapshot now</button
-    >
-    <button
-      class="rounded-md border border-line px-2 py-1.5 text-xs font-medium text-dim hover:border-faint hover:text-ink"
-      onclick={() => void suspendInactive()}>Suspend inactive</button
-    >
-  </div>
-
   {#if notice !== ''}
-    <p class="rounded-md bg-overlay px-2 py-1 text-xs text-dim" role="status">{notice}</p>
+    <div
+      class="flex items-start gap-2 border-b border-line px-3 py-1.5 text-[12px] {noticeKind === 'bad'
+        ? 'text-bad'
+        : 'text-dim'}"
+      role="status"
+    >
+      <Icon name={noticeKind === 'bad' ? 'alert' : 'check'} size={13} class="mt-0.5 shrink-0" />
+      <p class="min-w-0 flex-1 break-words">{notice}</p>
+      <button class="shrink-0 text-faint hover:text-ink" aria-label="Dismiss" onclick={() => (notice = '')}>
+        <Icon name="close" size={13} />
+      </button>
+    </div>
   {/if}
 
   {#if tmsCount > 0}
-    <div class="flex items-center gap-2 rounded-md border border-warn/40 bg-warn/10 px-2 py-1.5">
-      <p class="min-w-0 flex-1 text-xs leading-snug text-warn">
-        <span class="font-semibold">{tmsCount}</span> Marvellous Suspender tab{tmsCount === 1 ? '' : 's'} detected.
+    <div class="flex items-start gap-2 border-b border-warn/25 bg-warn/5 px-3 py-2">
+      <Icon name="alert" size={13} class="mt-0.5 shrink-0 text-warn" />
+      <p class="min-w-0 flex-1 text-[12px] leading-snug text-dim">
+        <span class="num font-semibold text-warn">{tmsCount}</span> Marvellous Suspender tab{tmsCount === 1 ? '' : 's'} found.
         Migrating restores each one to its real URL natively.
       </p>
       <button
-        class="shrink-0 rounded-md bg-warn px-2 py-1 text-xs font-semibold text-black hover:brightness-110 disabled:opacity-50"
+        class="shrink-0 rounded-md bg-warn px-2 py-1 text-[11px] font-semibold text-on-awake hover:brightness-105 disabled:opacity-50"
         disabled={migrating}
         onclick={() => void migrateTms()}>
         {migrating ? 'Migrating…' : `Migrate ${tmsCount}`}
@@ -227,30 +293,50 @@
     </div>
   {/if}
 
-  <Search onOpenSession={(s) => (selected = s)} />
-
-  <Duplicates />
-
-  <StaleTabs />
-
-  <section class="flex min-h-0 flex-[2] flex-col">
-    <h2 class="mb-1 pl-0.5 text-[10px] font-semibold uppercase tracking-wider text-faint">Current window</h2>
-    <LiveTabs onStats={(total, asleep) => { tabCount = total; asleepCount = asleep; }} />
-  </section>
-
-  <section class="flex min-h-0 flex-[2] flex-col">
-    <h2 class="mb-1 pl-0.5 text-[10px] font-semibold uppercase tracking-wider text-faint">Collections</h2>
-    <Collections />
-  </section>
-
-  <section class="flex min-h-0 flex-[3] flex-col">
-    <h2 class="mb-1 pl-0.5 text-[10px] font-semibold uppercase tracking-wider text-faint">
-      Sessions {#if loading}<span class="animate-pulse">· loading…</span>{/if}
-    </h2>
-    {#if selected !== null}
-      <SessionDetail session={selected} {busyId} onRestore={(s) => void restore(s)} onBack={() => (selected = null)} onRename={(s, name) => void rename(s, name)} onDelete={(s) => void removeSession(s)} />
+  <main class="flex min-h-0 flex-1 flex-col">
+    {#if view === 'tabs'}
+      <div class="flex min-h-0 flex-1 flex-col">
+        <LiveTabs onStats={(total, asleep) => { tabCount = total; asleepCount = asleep; }} />
+      </div>
+    {:else if view === 'stale'}
+      <div class="flex min-h-0 flex-1 flex-col">
+        <StaleTabs />
+      </div>
+    {:else if view === 'dups'}
+      <div class="flex min-h-0 flex-1 flex-col">
+        <Duplicates />
+      </div>
+    {:else if view === 'sets'}
+      <div class="flex min-h-0 flex-1 flex-col">
+        <Collections />
+      </div>
+    {:else if selected !== null}
+      <div class="flex min-h-0 flex-1 flex-col">
+        <SessionDetail
+          session={selected}
+          {busyId}
+          onRestore={(s) => void restore(s)}
+          onBack={() => (selected = null)}
+          onRename={(s, name) => void rename(s, name)}
+          onDelete={(s) => void removeSession(s)}
+        />
+      </div>
     {:else}
-      <SessionList {sessions} onRestore={(s, options) => void restore(s, options)} {busyId} onSelect={(s) => (selected = s)} onDelete={(s) => void removeSession(s)} {hasMore} {loading} onLoadMore={() => void loadMore()} onImported={() => void refresh()} onOpenUrls={(urls) => void openPastedUrls(urls)} onSaveUrls={(urls) => void savePastedUrls(urls)} />
+      <div class="flex min-h-0 flex-1 flex-col">
+        <SessionList
+          {sessions}
+          onRestore={(s, options) => void restore(s, options)}
+          {busyId}
+          onSelect={(s) => (selected = s)}
+          onDelete={(s) => void removeSession(s)}
+          {hasMore}
+          {loading}
+          onLoadMore={() => void loadMore()}
+          onImported={() => void refresh()}
+          onOpenUrls={(urls) => void openPastedUrls(urls)}
+          onSaveUrls={(urls) => void savePastedUrls(urls)}
+        />
+      </div>
     {/if}
-  </section>
+  </main>
 </div>

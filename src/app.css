@@ -3,31 +3,146 @@
 /*
  * TabDorm design tokens — single source of visual truth for every surface
  * (side panel, popup, options). Never hardcode a hex value in a component.
+ *
+ * World: "night desk". Warm graphite base, lamp-amber for awake/action,
+ * moonlight teal for asleep, rust for stale. See DESIGN.md.
  */
 @theme {
-  --color-surface: #0a0c11;
-  --color-raised: #12151d;
-  --color-overlay: #1a1e28;
-  --color-line: #242a37;
-  --color-ink: #e8ebf2;
-  --color-dim: #9aa3b4;
-  --color-faint: #636c7e;
-  --color-accent: #6f7dff;
-  --color-accent-strong: #8b95ff;
-  --color-good: #34d399;
-  --color-warn: #f5b84c;
-  --color-bad: #f47174;
+  --color-surface: #0e0f11;
+  --color-raised: #15171a;
+  --color-overlay: #1c1f23;
+  --color-line: #262a2f;
+  --color-line-strong: #343941;
+  --color-ink: #f4f1ea;
+  --color-dim: #a9a49b;
+  --color-faint: #8a857c;
+  --color-awake: #e9b46a;
+  --color-asleep: #6f9fae;
+  --color-stale: #c8836b;
+  --color-good: #86b07a;
+  --color-warn: #e9b46a;
+  --color-bad: #d0766b;
+  /* Legacy aliases: the shell and older components still say accent. */
+  --color-accent: #e9b46a;
+  --color-accent-strong: #f0c483;
+  /* Surfaces that sit under a coloured fill use dark text, never white. */
+  --color-on-awake: #17120a;
 }
 
-body {
-  background-color: var(--color-surface);
-  color: var(--color-ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  -webkit-font-smoothing: antialiased;
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-surface);
+    color: var(--color-ink);
+    /* Platform stack on purpose: these surfaces live inside browser chrome. */
+    font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Browser surfaces ship with the product: theme the parts we did not draw. */
+  ::selection {
+    background-color: color-mix(in srgb, var(--color-awake) 26%, transparent);
+    color: var(--color-ink);
+  }
+
+  :root {
+    caret-color: var(--color-awake);
+    accent-color: var(--color-awake);
+    scrollbar-color: var(--color-line-strong) transparent;
+    scrollbar-width: thin;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--color-line-strong);
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-faint);
+  }
+
+  /* Shared focus ring so keyboard navigation is visible on every control. */
+  :where(button, a, input, select, textarea, summary, [role='switch'], [tabindex]):focus-visible {
+    outline: 2px solid var(--color-awake);
+    outline-offset: 1px;
+    border-radius: 4px;
+  }
+
+  /* Numbers that the eye compares sit in columns. */
+  .num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.01em;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 }
 
-/* Shared focus ring so keyboard navigation is visible on every control. */
-:where(button, input, select, textarea, [role='switch']):focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 1px;
+/* One authored moment: the bulk action bar rises. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rise {
+  animation: rise 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Static loading line: a tool read for seconds must not animate its content. */
+@keyframes sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.sweep::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--color-awake) 22%, transparent), transparent);
+  animation: sweep 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sweep::after {
+    animation: none;
+  }
 }

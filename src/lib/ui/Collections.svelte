@@ -1,6 +1,7 @@
 <script lang="ts">
   import { sendToBackground } from '@/core/messaging';
   import { deleteCollection, findDuplicateUrls, pageCollections, putCollection } from '@/core/db/collections';
+  import Icon from '@/lib/ui/Icon.svelte';
   import { VALID_GROUP_COLORS, type GroupColor, type TabCollection } from '@/types';
 
   const DOT: Record<GroupColor, string> = {
@@ -126,7 +127,7 @@
   };
 </script>
 
-<div class="flex min-h-0 flex-col">
+<div class="flex min-h-0 flex-1 flex-col">
   <div class="mb-1 flex items-center gap-2">
     <button
       class="rounded-md border border-line px-2 py-1 text-[11px] text-dim hover:border-faint hover:text-ink disabled:opacity-50"
@@ -138,24 +139,25 @@
     {/if}
   </div>
   {#if notice !== ''}
-    <p class="mb-1 rounded-md bg-overlay px-2 py-1 text-xs text-dim" role="status">{notice}</p>
+    <p class="mb-1 rounded-md bg-overlay px-2 py-1 text-[12px] text-dim" role="status">{notice}</p>
   {/if}
   {#if items.length === 0}
-    <p class="py-2 text-center text-xs text-faint">No collections yet. Save the current window’s tabs to start one.</p>
+    <p class="py-2 text-center text-[12px] text-faint">No collections yet. Save the current window’s tabs to start one.</p>
   {:else}
-    <div class="flex flex-col gap-1.5 overflow-y-auto">
+    <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
       {#each items as c (c.id)}
-        <details class="rounded-lg border border-line bg-overlay px-2.5 py-1.5">
-          <summary class="flex cursor-pointer list-none items-center gap-2 text-xs">
+        <details class="border-b border-line/70 px-3 py-2">
+          <summary class="flex cursor-pointer list-none items-center gap-2 text-[12px]">
             {#if c.color !== undefined}<span class="h-2 w-2 shrink-0 rounded-full {DOT[c.color]}"></span>{/if}
-            <span class="min-w-0 flex-1 truncate font-medium text-ink" title={c.name}>{c.pinned ? '📌 ' : ''}{c.name}</span>
-            <span class="shrink-0 text-[10px] text-faint">{c.tabs.length} tabs</span>
+            {#if c.pinned}<span class="shrink-0 text-awake"><Icon name="pin" size={11} /></span>{/if}
+            <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-ink" title={c.name}>{c.name}</span>
+            <span class="num shrink-0 text-[11px] text-dim">{c.tabs.length} tabs</span>
           </summary>
-          <div class="mt-1.5 flex flex-wrap items-center gap-1 border-t border-line/60 pt-1.5 text-[11px]">
-            <button class="rounded border border-line px-1.5 py-0.5 text-dim hover:border-faint hover:text-ink" onclick={() => void open(c)}>Open all</button>
-            <button class="rounded border border-line px-1.5 py-0.5 text-dim hover:border-faint hover:text-ink" onclick={() => void addCurrentTab(c)}>＋ tab</button>
-            <button class="rounded border border-line px-1.5 py-0.5 text-dim hover:border-faint hover:text-ink" onclick={() => void togglePin(c)}>{c.pinned ? 'Unpin' : 'Pin'}</button>
-            <button class="rounded border border-line px-1.5 py-0.5 text-dim hover:border-faint hover:text-ink" onclick={() => void rename(c)}>Rename</button>
+          <div class="mt-2 flex flex-wrap items-center gap-1 border-t border-line/60 pt-2 text-[11px]">
+            <button class="rounded border border-line px-1.5 py-0.5 text-dim hover:border-line-strong hover:text-ink" onclick={() => void open(c)}>Open all</button>
+            <button class="rounded border border-line px-1.5 py-0.5 text-dim hover:border-line-strong hover:text-ink" onclick={() => void addCurrentTab(c)}>Add tab</button>
+            <button class="rounded border border-line px-1.5 py-0.5 text-dim hover:border-line-strong hover:text-ink" onclick={() => void togglePin(c)}>{c.pinned ? 'Unpin' : 'Pin'}</button>
+            <button class="rounded border border-line px-1.5 py-0.5 text-dim hover:border-line-strong hover:text-ink" onclick={() => void rename(c)}>Rename</button>
             {#each VALID_GROUP_COLORS as color (color)}
               <button
                 class="h-3.5 w-3.5 rounded-full {DOT[color]} {c.color === color ? 'ring-2 ring-ink/50' : 'opacity-50 hover:opacity-100'}"
@@ -168,7 +170,7 @@
             {#each c.tabs as t, i (i + t.url)}
               <li class="flex items-center gap-1.5 text-[11px] text-dim">
                 <span class="min-w-0 flex-1 truncate" title={t.url}>{t.title === '' ? t.url : t.title}</span>
-                <button class="shrink-0 text-faint hover:text-bad" title="Remove from collection" onclick={() => void removeTab(c, i)}>✕</button>
+                <button class="shrink-0 text-faint hover:text-bad" title="Remove from collection" aria-label="Remove from collection" onclick={() => void removeTab(c, i)}><Icon name="close" size={11} /></button>
               </li>
             {/each}
           </ul>
