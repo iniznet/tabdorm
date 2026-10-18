@@ -29,6 +29,16 @@ Restoring a 50+ tab session never blocks the CPU:
 - **Paste-links import:** arbitrary text is scanned for unique http(s) URLs (capped at 500) in `core/url-extract.ts`; the extracted list can be opened as paced tabs or saved directly as a session.
 - **Collections** (`core/db/collections.ts`, Dexie v2 table) are user-curated, named, color-coded, pinnable tab lists with duplicate-URL detection — a lighter organizational layer on top of snapshots.
 
+## Native restore guard
+
+Chrome's Ctrl+Shift+T recreates a closed window and starts loading every tab — extension-driven
+discard state does not survive the round trip. `core/restore-guard.ts` matches a newly created
+window positionally (normalized URLs, count within tolerance) against the newest `closed_window`
+sessions and re-discards the background tabs that were asleep at close time through
+`discardTabSafe`; tabs still mid-load fall through to the Discard Race Guard. TabDorm's own
+paced restoration marks its windows self-restored, so the guard never fights
+`restoration.restoreAsDiscarded`. Knobs live under `restoration.nativeRestoreGuard*`.
+
 ## TMS migration
 
 The Marvellous Suspender encodes real destinations in `suspended.html#ttl=…&uri=…` fragment URLs. The migration engine (`migrateAll`) scans open tabs for that shape, decodes everything after `uri=` (query strings included), and rewrites the tabs back to their original URLs — a one-click escape hatch from the dead extension.

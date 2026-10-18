@@ -48,6 +48,29 @@ export interface RestoreOutcome {
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Self-restored window registry: windows this pipeline created are exempt from
+ * the native restore guard — their tabs already follow `restoreAsDiscarded`.
+ * Entries expire so the map never grows unbounded; the registry deliberately
+ * uses no event listener (MV3 listeners must register synchronously).
+ */
+const selfRestoredWindows = new Map<number, number>();
+const SELF_RESTORE_MARK_MS = 10 * 60_000;
+
+export function markSelfRestoredWindow(windowId: number): void {
+  selfRestoredWindows.set(windowId, Date.now() + SELF_RESTORE_MARK_MS);
+}
+
+export function isSelfRestoredWindow(windowId: number): boolean {
+  const expiry = selfRestoredWindows.get(windowId);
+  if (expiry === undefined) return false;
+  if (expiry < Date.now()) {
+    selfRestoredWindows.delete(windowId);
+    return false;
+  }
+  return true;
+}
+
 interface CreatedTab {
   tabId: number;
   groupKey?: string;
@@ -211,6 +234,7 @@ async function restoreWindow(
     progress.tabsFailed += win.tabs.length;
     return;
   }
+  markSelfRestoredWindow(newWindow.id);
   progress.windowsRestored += 1;
 
   const created: CreatedTab[] = [];
