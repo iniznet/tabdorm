@@ -6,6 +6,7 @@ import { ensureColdStartSeeded, forgetActivity, touchActivity } from '@/core/act
 import { updateAsleepBadge } from '@/core/badge';
 import { initContextMenus, suspendOtherTabs, toggleWhitelistForTab } from '@/core/context-menus';
 import { restoreSession, openUrlListPaced } from '@/core/restoration';
+import { initRestoreGuard } from '@/core/restore-guard';
 import { applyFormGuardSync, clearDirtyForm, markDirtyForm } from '@/core/form-guard';
 import { reportBatteryState } from '@/core/battery';
 import { discardTabSafe, flushPendingDiscard } from '@/core/discard';
@@ -34,6 +35,7 @@ import type { UnifiedSession } from '@/types';
 export default defineBackground(() => {
   const shadowTree = new ShadowTree();
   shadowTree.install();
+  initRestoreGuard();
   initIdleGuard();
   registerConfigInvalidation();
   chrome.alarms.onAlarm.addListener((alarm) => {

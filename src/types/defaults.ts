@@ -56,6 +56,10 @@ export const DEFAULT_TAB_DORM_CONFIG: TabDormConfig = {
     restoreAsDiscarded: true,
     restoreGroupsCollapsed: true,
     clampToBounds: true,
+    nativeRestoreGuard: true,
+    nativeRestoreGuardWindowMinutes: 30,
+    nativeRestoreGuardMinTabs: 5,
+    nativeRestoreGuardMatchPct: 80,
   },
   snapshots: {
     enabled: true,
@@ -81,6 +85,9 @@ const NUMERIC_BOUNDS = {
   retentionDays: { min: 1, max: 3_650 },
   autoBackupDownloadDays: { min: 0, max: 365 },
   staleAfterHours: { min: 0, max: 8760 },
+  nativeRestoreGuardWindowMinutes: { min: 1, max: 10_080 },
+  nativeRestoreGuardMinTabs: { min: 2, max: 500 },
+  nativeRestoreGuardMatchPct: { min: 50, max: 100 },
 } as const;
 
 function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
@@ -207,6 +214,10 @@ export function resolveConfig(raw: unknown): TabDormConfig {
       restoreAsDiscarded: readBool(rest['restoreAsDiscarded'], DEFAULT_TAB_DORM_CONFIG.restoration.restoreAsDiscarded),
       restoreGroupsCollapsed: readBool(rest['restoreGroupsCollapsed'], DEFAULT_TAB_DORM_CONFIG.restoration.restoreGroupsCollapsed),
       clampToBounds: readBool(rest['clampToBounds'], DEFAULT_TAB_DORM_CONFIG.restoration.clampToBounds),
+      nativeRestoreGuard: readBool(rest['nativeRestoreGuard'], DEFAULT_TAB_DORM_CONFIG.restoration.nativeRestoreGuard),
+      nativeRestoreGuardWindowMinutes: clampNumber(rest['nativeRestoreGuardWindowMinutes'], DEFAULT_TAB_DORM_CONFIG.restoration.nativeRestoreGuardWindowMinutes, b.nativeRestoreGuardWindowMinutes.min, b.nativeRestoreGuardWindowMinutes.max),
+      nativeRestoreGuardMinTabs: clampNumber(rest['nativeRestoreGuardMinTabs'], DEFAULT_TAB_DORM_CONFIG.restoration.nativeRestoreGuardMinTabs, b.nativeRestoreGuardMinTabs.min, b.nativeRestoreGuardMinTabs.max),
+      nativeRestoreGuardMatchPct: clampNumber(rest['nativeRestoreGuardMatchPct'], DEFAULT_TAB_DORM_CONFIG.restoration.nativeRestoreGuardMatchPct, b.nativeRestoreGuardMatchPct.min, b.nativeRestoreGuardMatchPct.max),
     },
     snapshots: {
       enabled: readBool(snap['enabled'], DEFAULT_TAB_DORM_CONFIG.snapshots.enabled),
