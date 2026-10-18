@@ -89,6 +89,20 @@ export async function getLatestSessionOfType(type: UnifiedSession['type']): Prom
     .first();
 }
 
+/** Newest-first sessions of one type (bounded read), used by the native restore guard. */
+export async function getRecentSessionsOfType(
+  type: UnifiedSession['type'],
+  limit: number,
+): Promise<UnifiedSession[]> {
+  const capped = Math.max(1, Math.min(Math.trunc(limit), 10));
+  return db.sessions
+    .where('[type+timestamp]')
+    .between([type, DexieMinKey], [type, DexieMaxKey])
+    .reverse()
+    .limit(capped)
+    .toArray();
+}
+
 /** Deletes the OLDEST auto_snapshots beyond the retention cap. Returns count removed. */
 export async function pruneAutoSnapshots(maxRetained: number): Promise<number> {
   const type: UnifiedSession['type'] = 'auto_snapshot';

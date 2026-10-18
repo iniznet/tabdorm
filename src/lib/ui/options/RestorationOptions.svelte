@@ -50,5 +50,38 @@
       hint="Off-screen or oversized windows are pulled back into the visible desktop."
       onChange={(v) => onChange((d) => (d.restoration.clampToBounds = v))}
     />
+    <Toggle
+      checked={config.restoration.nativeRestoreGuard}
+      label="Keep tabs asleep on Ctrl+Shift+T"
+      hint="Reopening a closed window with the browser's own restore re-discards the tabs that were asleep when it closed, instead of loading them all."
+      onChange={(v) => onChange((d) => (d.restoration.nativeRestoreGuard = v))}
+    />
+    <NumberField
+      value={config.restoration.nativeRestoreGuardWindowMinutes}
+      label="Guard window"
+      hint="How long after closing a window its snapshot can still match a native restore."
+      min={1}
+      max={10080}
+      suffix="min"
+      onChange={(v) => onChange((d) => (d.restoration.nativeRestoreGuardWindowMinutes = v))}
+    />
+    <NumberField
+      value={config.restoration.nativeRestoreGuardMinTabs}
+      label="Guard minimum tabs"
+      hint="Windows with fewer tabs are never matched by the guard."
+      min={2}
+      max={500}
+      suffix="tabs"
+      onChange={(v) => onChange((d) => (d.restoration.nativeRestoreGuardMinTabs = v))}
+    />
+    <NumberField
+      value={config.restoration.nativeRestoreGuardMatchPct}
+      label="Guard match ratio"
+      hint="Percentage of tabs that must line up with the closed snapshot."
+      min={50}
+      max={100}
+      suffix="%"
+      onChange={(v) => onChange((d) => (d.restoration.nativeRestoreGuardMatchPct = v))}
+    />
   </div>
 </section>
