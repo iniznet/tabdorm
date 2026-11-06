@@ -8,6 +8,8 @@ import { initContextMenus, suspendOtherTabs, toggleWhitelistForTab } from '@/cor
 import { restoreSession, openUrlListPaced } from '@/core/restoration';
 import { initRestoreGuard } from '@/core/restore-guard';
 import { applyFormGuardSync, clearDirtyForm, markDirtyForm } from '@/core/form-guard';
+import { applyImageCacheSync, lookupCachedImages } from '@/core/image-replay';
+import { clearAllImages, clearImagesForHost, imageHostStats, imageTotals, sweepImages } from '@/core/image-store';
 import { reportBatteryState } from '@/core/battery';
 import { discardTabSafe, flushPendingDiscard } from '@/core/discard';
 import { closeDuplicateTabs } from '@/core/close-duplicates';
@@ -62,6 +64,7 @@ export default defineBackground(() => {
     if (area !== 'sync' || changes['tabdormConfig'] === undefined) return;
     void resyncAlarms();
     void getConfig().then(applyFormGuardSync);
+    void getConfig().then(applyImageCacheSync);
     scheduleRoutingBackfill(changes['tabdormConfig']);
   });
   void bootstrap(shadowTree);
@@ -72,7 +75,21 @@ async function sweepNow(): Promise<ReturnType<typeof runSweepOnce>> {
   const summary = await runSweepOnce();
   await collapseIdleGroups();
   await updateAsleepBadge();
+  await sweepImageCache();
   return summary;
+}
+
+/**
+ * TTL deletion then LRU eviction for the pinned image cache. Runs even with the
+ * feature switched off, so turning it off never strands bytes on disk.
+ */
+async function sweepImageCache(): Promise<void> {
+  try {
+    const config = await getConfig();
+    await sweepImages(config.images, Date.now());
+  } catch (error) {
+    console.warn('[tabdorm] image cache sweep failed.', error);
+  }
 }
 
 async function resyncAlarms(): Promise<void> {
@@ -88,10 +105,12 @@ async function bootstrap(shadowTree: ShadowTree): Promise<void> {
     await syncSweepAlarm(config);
     await syncSnapshotAlarm(config);
     await ensureColdStartSeeded();
+    await applyImageCacheSync(config);
   } catch (error) {
     console.warn('[tabdorm] config bootstrap failed; defaults active.', error);
   }
   void initDatabase();
+  void sweepImageCache();
   await shadowTree.init();
   await pruneTabStats();
   // Tabs opened before this build have no record; Chrome's lastAccessed seeds them.
@@ -185,6 +204,16 @@ async function handleMessage(
       if (tabId !== undefined) await clearDirtyForm(tabId);
       return undefined;
     }
+    case 'imagesLookup': {
+      const config = await getConfig();
+      return { images: await lookupCachedImages(request.pageUrl, request.keys, config) };
+    }
+    case 'imagesStats':
+      return { totals: await imageTotals(), hosts: await imageHostStats() };
+    case 'imagesClearHost':
+      return clearImagesForHost(request.host);
+    case 'imagesClearAll':
+      return clearAllImages();
   }
 }
 

@@ -53,6 +53,14 @@ export const DEFAULT_TAB_DORM_CONFIG: TabDormConfig = {
   stale: {
     staleAfterHours: 168,
   },
+  images: {
+    enabled: false,
+    ttlMinutes: 1_440,
+    maxMegabytes: 64,
+    maxImageKilobytes: 512,
+    minPixels: 4_096,
+    captureDeadlineMs: 1_500,
+  },
   restoration: {
     batchSize: 10,
     delayBetweenTabsMs: 50,
@@ -88,6 +96,11 @@ const NUMERIC_BOUNDS = {
   retentionDays: { min: 1, max: 3_650 },
   autoBackupDownloadDays: { min: 0, max: 365 },
   staleAfterHours: { min: 0, max: 8760 },
+  imageTtlMinutes: { min: 15, max: 20_160 },
+  imageMaxMegabytes: { min: 0, max: 8_192 },
+  imageMaxImageKilobytes: { min: 32, max: 8_192 },
+  imageMinPixels: { min: 0, max: 250_000 },
+  imageCaptureDeadlineMs: { min: 250, max: 5_000 },
   nativeRestoreGuardWindowMinutes: { min: 1, max: 10_080 },
   nativeRestoreGuardMinTabs: { min: 2, max: 500 },
   nativeRestoreGuardMatchPct: { min: 50, max: 100 },
@@ -167,6 +180,7 @@ export function resolveConfig(raw: unknown): TabDormConfig {
   const r = readObject(g['routing']);
   const focus = readObject(source['focus']);
   const st = readObject(source['stale']);
+  const img = readObject(source['images']);
   const rest = readObject(source['restoration']);
   const snap = readObject(source['snapshots']);
   const b = NUMERIC_BOUNDS;
@@ -217,6 +231,14 @@ export function resolveConfig(raw: unknown): TabDormConfig {
     },
     stale: {
       staleAfterHours: clampNumber(st['staleAfterHours'], DEFAULT_TAB_DORM_CONFIG.stale.staleAfterHours, b.staleAfterHours.min, b.staleAfterHours.max),
+    },
+    images: {
+      enabled: readBool(img['enabled'], DEFAULT_TAB_DORM_CONFIG.images.enabled),
+      ttlMinutes: clampNumber(img['ttlMinutes'], DEFAULT_TAB_DORM_CONFIG.images.ttlMinutes, b.imageTtlMinutes.min, b.imageTtlMinutes.max),
+      maxMegabytes: clampNumber(img['maxMegabytes'], DEFAULT_TAB_DORM_CONFIG.images.maxMegabytes, b.imageMaxMegabytes.min, b.imageMaxMegabytes.max),
+      maxImageKilobytes: clampNumber(img['maxImageKilobytes'], DEFAULT_TAB_DORM_CONFIG.images.maxImageKilobytes, b.imageMaxImageKilobytes.min, b.imageMaxImageKilobytes.max),
+      minPixels: clampNumber(img['minPixels'], DEFAULT_TAB_DORM_CONFIG.images.minPixels, b.imageMinPixels.min, b.imageMinPixels.max),
+      captureDeadlineMs: clampNumber(img['captureDeadlineMs'], DEFAULT_TAB_DORM_CONFIG.images.captureDeadlineMs, b.imageCaptureDeadlineMs.min, b.imageCaptureDeadlineMs.max),
     },
     restoration: {
       batchSize: clampNumber(rest['batchSize'], DEFAULT_TAB_DORM_CONFIG.restoration.batchSize, b.batchSize.min, b.batchSize.max),
