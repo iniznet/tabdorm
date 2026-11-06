@@ -1,5 +1,6 @@
 import { paintSleepIcon, restoreSleepIcon } from './sleep-icon';
 import { captureTabImages } from './image-capture';
+import { promoteTabSessions } from './image-store';
 
 /** Chromium errors that are expected side effects of racing tab lifecycles. */
 const BENIGN_DISCARD_PATTERNS: readonly RegExp[] = [
@@ -32,8 +33,12 @@ export async function discardTabSafe(tabId: number): Promise<DiscardOutcome> {
   }
   if (tab.discarded) return 'already_discarded';
   if (tab.active) return 'skipped';
-  // Pinned images are read from the live DOM, so they must land before the
-  // discard for the same reason as the mark. Bounded by config and never fatal.
+  // The awake pass already read these pictures, so promotion is a table move and
+  // costs no network. It runs before the DOM sweep for the same reason as the
+  // mark: both must land before the discard, and never fail it.
+  await promoteTabSessions(tabId, Date.now()).catch(() => 0);
+  // The sweep then spends its deadline only on the gaps: a `blob:` viewer the
+  // worker can never reach, or a page whose bytes predate the observer.
   if (tab.url !== undefined) await captureTabImages(tabId, tab.url);
   // The strip keeps whatever favicon the document last declared, so the mark must
   // land before the discard; a discarded tab has no renderer to retry from.
