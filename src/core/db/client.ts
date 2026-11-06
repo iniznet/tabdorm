@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { CachedImage, TabCollection, UnifiedSession } from '@/types';
+import type { CachedImage, CachedSessionImage, TabCollection, UnifiedSession } from '@/types';
 
 /** UnifiedSession as persisted — Dexie adds the auto-increment `rev` cursor key. */
 export interface StoredSession extends UnifiedSession {
@@ -10,6 +10,7 @@ export class TabDormDatabase extends Dexie {
   sessions!: Table<StoredSession, number, UnifiedSession>;
   collections!: Table<TabCollection, number, TabCollection>;
   images!: Table<CachedImage, string, CachedImage>;
+  sessionImages!: Table<CachedSessionImage, string, CachedSessionImage>;
 
   constructor() {
     super('tabdorm');
@@ -30,6 +31,15 @@ export class TabDormDatabase extends Dexie {
       sessions: '++rev, &id, timestamp, [type+timestamp], contentHash',
       collections: '++rev, &id, updatedAt',
       images: '&key, savedAt, lastUsed, host',
+    });
+    // Session band: the same bytes while their tab is still open. Keyed by tab
+    // through `tabId` so a close deletes one range, and promoted into `images`
+    // at suspend. Replay never reads this table.
+    this.version(4).stores({
+      sessions: '++rev, &id, timestamp, [type+timestamp], contentHash',
+      collections: '++rev, &id, updatedAt',
+      images: '&key, savedAt, lastUsed, host',
+      sessionImages: '&key, tabId, host, savedAt, lastUsed',
     });
   }
 }

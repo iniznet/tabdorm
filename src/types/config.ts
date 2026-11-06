@@ -44,6 +44,17 @@ export interface ImageCacheConfig {
   maxImageKilobytes: number;
   /** Images below this pixel area are skipped — tracking pixels, spacers, icons. */
   minPixels: number;
+  /**
+   * Floor for a response read without a rendered box — a picture loaded through
+   * `fetch` and painted by script. Pixel area is unknown there, so bytes decide.
+   */
+  minBytes: number;
+  /** Capture while the tab is awake, not only in the seconds before a discard. */
+  autoCapture: boolean;
+  /** Session rows one tab may hold; least recently seen go first. `0` means no cap. */
+  sessionMaxImages: number;
+  /** Session byte budget across every open tab. `0` means no cap. */
+  sessionMaxMegabytes: number;
   /** Wall-clock ceiling for one tab's capture, so a suspend never waits on it. */
   captureDeadlineMs: number;
 }
