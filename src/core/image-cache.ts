@@ -67,6 +67,32 @@ export function exceedsByteCeiling(bytes: number, config: ImageCacheConfig): boo
   return bytes > config.maxImageKilobytes * 1024;
 }
 
+/** What the selection rules need from a page candidate. */
+export interface SizedCandidate {
+  pixels: number;
+}
+
+/**
+ * The candidates worth spending the capture budget on, biggest first.
+ *
+ * Page order is not importance: avatars, icons, and sprite sheets sit near the
+ * top of the DOM on most sites, and the fetch budget is 1500 ms. Sorting by
+ * rendered area puts the pictures a reader would name first, and a stable sort
+ * keeps page order inside a tie so two runs pick the same bytes.
+ */
+export function selectCaptureCandidates<T extends SizedCandidate>(
+  candidates: readonly T[],
+  limit: number,
+): T[] {
+  const usable = candidates.filter((candidate) => Number.isFinite(candidate.pixels) && candidate.pixels > 0);
+  if (limit <= 0) return [];
+  return usable
+    .map((candidate, index) => ({ candidate, index }))
+    .sort((left, right) => right.candidate.pixels - left.candidate.pixels || left.index - right.index)
+    .slice(0, limit)
+    .map((entry) => entry.candidate);
+}
+
 /** Human byte size for readouts: `0 B`, `940 B`, `12.4 KB`, `1.8 MB`. */
 export function formatByteSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
