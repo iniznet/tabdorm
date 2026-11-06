@@ -9,7 +9,18 @@ import { restoreSession, openUrlListPaced } from '@/core/restoration';
 import { initRestoreGuard } from '@/core/restore-guard';
 import { applyFormGuardSync, clearDirtyForm, markDirtyForm } from '@/core/form-guard';
 import { applyImageCacheSync, lookupCachedImages } from '@/core/image-replay';
-import { clearAllImages, clearImagesForHost, imageHostStats, imageTotals, sweepImages } from '@/core/image-store';
+import {
+  clearAllImages,
+  clearImagesForHost,
+  clearSessionImages,
+  imageHostStats,
+  imageTotals,
+  purgeTabSessions,
+  sessionTotals,
+  sweepImages,
+  sweepSessionImages,
+} from '@/core/image-store';
+import { captureAnnouncedImages } from '@/core/session-capture';
 import { reportBatteryState } from '@/core/battery';
 import { discardTabSafe, flushPendingDiscard } from '@/core/discard';
 import { pickFocusCandidate } from '@/core/tab-focus';
@@ -88,6 +99,9 @@ async function sweepImageCache(): Promise<void> {
   try {
     const config = await getConfig();
     await sweepImages(config.images, Date.now());
+    // The session band has no TTL: only its budget can drop a row before the tab
+    // closes, and a sweep that ignored it could grow past the cap.
+    await sweepSessionImages(config.images);
   } catch (error) {
     console.warn('[tabdorm] image cache sweep failed.', error);
   }
@@ -111,6 +125,8 @@ async function bootstrap(shadowTree: ShadowTree): Promise<void> {
     console.warn('[tabdorm] config bootstrap failed; defaults active.', error);
   }
   void initDatabase();
+  // Every tab is new at browser start and its rows died with the last session.
+  void clearSessionImages();
   void sweepImageCache();
   await shadowTree.init();
   await pruneTabStats();
@@ -162,6 +178,8 @@ function registerActivityTracking(): void {
   chrome.tabs.onRemoved.addListener((tabId) => {
     void forgetActivity(tabId);
     void clearDirtyForm(tabId);
+    // The session band lives exactly as long as its tab.
+    void purgeTabSessions(tabId);
     void updateAsleepBadge();
   });
 }
@@ -223,8 +241,15 @@ async function handleMessage(
       const config = await getConfig();
       return { images: await lookupCachedImages(request.pageUrl, request.keys, config) };
     }
-    case 'imagesStats':
-      return { totals: await imageTotals(), hosts: await imageHostStats() };
+    case 'imageCandidates': {
+      const tabId = sender.tab?.id;
+      if (tabId === undefined) return 0;
+      return captureAnnouncedImages(tabId, request.pageUrl, request.items);
+    }
+    case 'imagesStats': {
+      const [totals, session, hosts] = await Promise.all([imageTotals(), sessionTotals(), imageHostStats()]);
+      return { totals, session, hosts };
+    }
     case 'imagesClearHost':
       return clearImagesForHost(request.host);
     case 'imagesClearAll':
