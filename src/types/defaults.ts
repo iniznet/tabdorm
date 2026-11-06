@@ -97,7 +97,7 @@ const NUMERIC_BOUNDS = {
   autoBackupDownloadDays: { min: 0, max: 365 },
   staleAfterHours: { min: 0, max: 8760 },
   imageTtlMinutes: { min: 15, max: 20_160 },
-  imageMaxMegabytes: { min: 8, max: 1_024 },
+  imageMaxMegabytes: { min: 8, max: 8_192 },
   imageMaxImageKilobytes: { min: 32, max: 8_192 },
   imageMinPixels: { min: 0, max: 250_000 },
   imageCaptureDeadlineMs: { min: 250, max: 5_000 },

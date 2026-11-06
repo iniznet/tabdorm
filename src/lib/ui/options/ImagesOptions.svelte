@@ -108,9 +108,9 @@
     <NumberField
       value={config.images.maxMegabytes}
       label="Storage budget"
-      hint="The least recently seen images go first once the store grows past this."
+      hint="The least recently seen images go first once the store grows past this. Chrome enforces its own share of the disk on top, so a very large value can still be refused."
       min={8}
-      max={1024}
+      max={8192}
       suffix="MB"
       onChange={(value) => onChange((draft) => (draft.images.maxMegabytes = value))}
     />
