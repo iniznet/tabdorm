@@ -1,5 +1,5 @@
 import { db } from './db/client';
-import { selectExpired, selectOverBudget, ttlMsOf } from './image-cache';
+import { pickPageThumbs, selectExpired, selectOverBudget, ttlMsOf } from './image-cache';
 import type { CachedImage, ImageCacheConfig, ImageCacheTotals, ImageClearResult, ImageHostStat } from '@/types';
 
 /**
@@ -104,6 +104,28 @@ export async function clearAllImages(): Promise<ImageClearResult> {
  * together because the grid paints the record it just read, and the `savedAt`
  * index carries the slice so the read never walks the whole store.
  */
+/** Newest rows one tab-list refresh may scan. A large cache must not stall a panel. */
+const THUMB_SCAN_ROWS = 400;
+
+/**
+ * One record per page url, newest first, for the thumbnail on a sleeping tab row.
+ * Read-only: pages with nothing cached are simply absent.
+ */
+export async function imageThumbsForPages(
+  pageUrls: readonly string[],
+): Promise<Map<string, CachedImage>> {
+  const wanted = [...new Set(pageUrls.filter((url) => url !== ''))];
+  const found = new Map<string, CachedImage>();
+  if (wanted.length === 0) return found;
+  const rows = await db.images.orderBy('savedAt').reverse().limit(THUMB_SCAN_ROWS).toArray();
+  const byKey = new Map(rows.map((row) => [row.key, row]));
+  for (const [page, key] of pickPageThumbs(rows, wanted)) {
+    const row = byKey.get(key);
+    if (row !== undefined) found.set(page, row);
+  }
+  return found;
+}
+
 export async function imageGalleryPage(offset: number, limit: number): Promise<CachedImage[]> {
   if (limit <= 0) return [];
   return db.images.orderBy('savedAt').reverse().offset(offset).limit(limit).toArray();
