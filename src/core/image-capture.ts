@@ -1,6 +1,12 @@
 import { getConfig } from './config-store';
-import { exceedsByteCeiling, hostOfUrl, isCacheableImageUrl, normalizeImageKey } from './image-cache';
-import { putImage } from './image-store';
+import {
+  exceedsByteCeiling,
+  hostOfUrl,
+  isCacheableImageUrl,
+  normalizeImageKey,
+  selectCaptureCandidates,
+} from './image-cache';
+import { putImage, readImages } from './image-store';
 import type { CachedImage, ImageCacheConfig } from '@/types';
 
 /**
@@ -15,6 +21,12 @@ import type { CachedImage, ImageCacheConfig } from '@/types';
 
 /** Candidates per page: a gallery can hold hundreds, and each one costs a fetch. */
 const MAX_CANDIDATES = 60;
+
+/**
+ * Candidates read from the page before selection. Reading more than the fetch cap
+ * is what lets the biggest pictures win; a page returns DOM order, not importance.
+ */
+const MAX_COLLECTED = 120;
 
 /** Fetch concurrency: finishes a normal page quickly, stays polite on a CDN. */
 const MAX_PARALLEL = 4;
@@ -131,7 +143,7 @@ export async function captureTabImages(tabId: number, pageUrl: string): Promise<
     const injections = await withDeadline(
       chrome.scripting.executeScript({
         target: { tabId },
-        args: [MAX_CANDIDATES],
+        args: [MAX_COLLECTED],
         func: collectCandidates,
       }),
       deadlineMs,
@@ -145,22 +157,35 @@ export async function captureTabImages(tabId: number, pageUrl: string): Promise<
   }
   if (candidates.length === 0) return 0;
 
-  const written = new Set<string>();
+  // Resolve keys once, in reader-visible order, so the budget follows importance.
+  const targets: string[] = [];
+  const queued = new Set<string>();
+  for (const candidate of selectCaptureCandidates(candidates, MAX_CANDIDATES)) {
+    if (!isCacheableImageUrl(candidate.src, pageUrl, candidate.pixels, config.images)) continue;
+    const key = normalizeImageKey(candidate.src, pageUrl);
+    if (key === null || queued.has(key)) continue;
+    queued.add(key);
+    targets.push(key);
+  }
+  if (targets.length === 0) return 0;
+
+  // Bytes already held cost no budget: a second discard of one page must spend its
+  // seconds on what is new instead of re-downloading what it wrote last time.
+  const held = new Set((await readImages(targets)).map((row) => row.key));
+  const fresh = targets.filter((key) => !held.has(key));
+  if (fresh.length === 0) return 0;
+
   let cursor = 0;
   let saved = 0;
 
   const worker = async (): Promise<void> => {
     for (;;) {
       if (Date.now() - startedAt >= deadlineMs) return;
-      const candidate = candidates[cursor];
+      const key = fresh[cursor];
       cursor += 1;
-      if (candidate === undefined) return;
-      const key = normalizeImageKey(candidate.src, pageUrl);
-      if (key === null || written.has(key)) continue;
-      if (!isCacheableImageUrl(candidate.src, pageUrl, candidate.pixels, config.images)) continue;
+      if (key === undefined) return;
       const record = await fetchCandidate(key, host, pageUrl, config.images, startedAt, deadlineMs);
       if (record === null) continue;
-      written.add(key);
       try {
         await putImage(record);
         saved += 1;
