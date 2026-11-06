@@ -10,17 +10,37 @@ const MENU_SUSPEND_TAB = 'tabdorm:suspend-tab';
 const MENU_SUSPEND_OTHERS = 'tabdorm:suspend-others';
 const MENU_NEVER = 'tabdorm:never-suspend';
 
+type MenuContexts = [`${chrome.contextMenus.ContextType}`, ...`${chrome.contextMenus.ContextType}`[]];
+
+/**
+ * The tab-strip context is Chrome 150+, and an older browser rejects the value
+ * outright instead of ignoring it. Page context is the pre-150 equivalent:
+ * right-click inside the page body rather than on the tab.
+ */
+const TAB_CONTEXTS: MenuContexts = ['tab'];
+const PAGE_CONTEXTS: MenuContexts = ['page'];
+
+const MENU_ITEMS = [
+  { id: MENU_SUSPEND_TAB, title: 'Suspend this tab' },
+  { id: MENU_SUSPEND_OTHERS, title: 'Suspend other tabs in this window' },
+  { id: MENU_NEVER, title: 'Never suspend this site' },
+] as const;
+
 /** Creates the tab context menus idempotently — SW restarts wipe registrations. */
 export function initContextMenus(): void {
-  chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({ id: MENU_SUSPEND_TAB, title: 'Suspend this tab', contexts: ['tab'] });
-    chrome.contextMenus.create({
-      id: MENU_SUSPEND_OTHERS,
-      title: 'Suspend other tabs in this window',
-      contexts: ['tab'],
-    });
-    chrome.contextMenus.create({ id: MENU_NEVER, title: 'Never suspend this site', contexts: ['tab'] });
-  });
+  const state = { fellBack: false };
+  const register = (contexts: MenuContexts): void => {
+    for (const item of MENU_ITEMS) {
+      chrome.contextMenus.create({ ...item, contexts }, () => {
+        if (state.fellBack || !chrome.runtime.lastError) return;
+        // Older Chrome refuses the tab context; retry once with page context so
+        // the menu exists at all instead of failing into the error page.
+        state.fellBack = true;
+        chrome.contextMenus.removeAll(() => register(PAGE_CONTEXTS));
+      });
+    }
+  };
+  chrome.contextMenus.removeAll(() => register(TAB_CONTEXTS));
   chrome.contextMenus.onClicked.addListener((info, tab) => {
     void handleMenuClick(info, tab);
   });
