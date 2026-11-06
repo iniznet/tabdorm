@@ -40,6 +40,27 @@
   }
 
   /**
+   * The tab in front of the reader. Chromium refuses to discard the active tab,
+   * so the background hands focus to a sibling before it sleeps this one. The
+   * sequence lives there because this window closes as soon as focus moves.
+   */
+  async function suspendThisTab(): Promise<void> {
+    busy = true;
+    const res = await sendToBackground({ type: 'suspendActiveTab' });
+    if (!res.ok) {
+      say(`Failed: ${res.error}`, 'bad');
+    } else {
+      const result = res.payload as { outcome?: string; reason?: string } | undefined;
+      if (result?.reason === 'no_sibling') {
+        say('Open a second tab first. Chromium will not discard the tab in front of you.', 'bad');
+      } else if (result?.outcome === 'discarded') say('Suspended. Focus moved to another tab.');
+      else if (result?.outcome === 'already_discarded') say('This tab is already suspended.');
+      else say('Could not suspend this tab. It may be a browser page that cannot sleep.', 'bad');
+    }
+    busy = false;
+  }
+
+  /**
    * Scoped clear for the tab you are looking at. Rows are keyed by image URL, not
    * by tab, so this empties the site's entries: two tabs of one site share them.
    */
@@ -107,6 +128,14 @@
     disabled={busy}
     onclick={() => void snapshotNow()}><Icon name="camera" size={14} /> Snapshot now</button
   >
+
+  <button
+    class="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[13px] text-dim transition-colors duration-120 hover:bg-overlay hover:text-ink disabled:opacity-40"
+    disabled={busy}
+    onclick={() => void suspendThisTab()}>
+    <Icon name="pause" size={14} class="shrink-0" />
+    <span class="min-w-0 flex-1">Suspend this tab</span>
+  </button>
 
   <button
     class="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[13px] text-dim transition-colors duration-120 hover:bg-overlay hover:text-ink disabled:opacity-40"
