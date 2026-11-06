@@ -16,6 +16,9 @@
   let note = $state('');
   let count = $state(0);
   let bytes = $state(0);
+  /** Rows kept for tabs that are still open, which the offline totals exclude. */
+  let liveCount = $state(0);
+  let liveBytes = $state(0);
   let hosts = $state<ImageHostStat[]>([]);
   let busy = $state(false);
 
@@ -26,10 +29,16 @@
       return;
     }
     const payload = response.payload as
-      | { totals?: { count?: number; bytes?: number }; hosts?: ImageHostStat[] }
+      | {
+          totals?: { count?: number; bytes?: number };
+          session?: { count?: number; bytes?: number };
+          hosts?: ImageHostStat[];
+        }
       | undefined;
     count = payload?.totals?.count ?? 0;
     bytes = payload?.totals?.bytes ?? 0;
+    liveCount = payload?.session?.count ?? 0;
+    liveBytes = payload?.session?.bytes ?? 0;
     hosts = payload?.hosts ?? [];
   }
 
@@ -179,7 +188,10 @@
   <div class="mt-4 rounded-md border border-line bg-raised px-3 py-2.5">
     <div class="flex items-baseline gap-2">
       <span class="text-[13px] text-ink">Stored now</span>
-      <span class="text-[12px] text-dim">{count} image(s), {formatByteSize(bytes)}</span>
+      <span class="text-[12px] text-dim">{count} image(s), {formatByteSize(bytes)} on disk</span>
+      {#if liveCount > 0}
+        <span class="text-[12px] text-faint">· {liveCount} live in open tabs, {formatByteSize(liveBytes)}</span>
+      {/if}
       <button
         type="button"
         class="ml-auto rounded-md px-2 py-1 text-[12px] text-bad transition-colors duration-120 hover:bg-bad/10 disabled:opacity-40"
