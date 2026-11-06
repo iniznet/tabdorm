@@ -2,6 +2,8 @@
 
 Pins the images a tab was showing into local storage, so waking that tab paints them without the network. A user turns it on in Options → Images, and the store keeps entries for a configurable TTL (default one day) inside a byte budget.
 
+Capture runs twice, with one rule between them: the page announces every picture as it loads, the worker reads the bytes once into a **session band** that dies with its tab, and a suspend **promotes** those rows into the offline store. So a discard costs a table move, and its DOM sweep is left with the gaps.
+
 ## What Chrome does not allow
 
 An extension cannot answer a network request with bytes it holds. MV3 removes blocking `webRequest`, `declarativeNetRequest` redirects must target a URL Chrome can load (a packaged file or another network URL, never runtime bytes), and a service worker cannot register a `fetch` handler for a page. Any design that claims to serve from cache instead of downloading is fiction.
@@ -28,10 +30,11 @@ graph LR
   K --> L[swap img src and background]
 ```
 
-- **Rules**: `core/image-cache.ts`, pure. Key normalization, cacheability, TTL selection, LRU selection.
-- **Store**: `core/image-store.ts` over Dexie table `images` in database `tabdorm` (`version(3)`).
-- **Capture**: `core/image-capture.ts`, called from inside `discardTabSafe()`.
-- **Replay**: `entrypoints/image-cache.content.ts` plus the `images:lookup` message handler.
+- **Rules**: `core/image-cache.ts` and `core/image-session.ts`, both pure. Key normalization, cacheability, TTL and LRU for the offline store; session keys, byte floor, session budgets, promotion mapping, and refusal guards for the session band.
+- **Store**: `core/image-store.ts` over Dexie tables `images` and `sessionImages` in database `tabdorm` (`version(4)`).
+- **Awake capture**: `core/session-capture.ts`, driven by the announce band in `public/image-cache.js` and the `imageCandidates` message.
+- **Suspend capture**: `core/image-capture.ts`, called from inside `discardTabSafe()` after promotion.
+- **Replay**: `public/image-cache.js` plus the `images:lookup` message handler.
 
 ## Invariants
 
@@ -45,6 +48,12 @@ graph LR
 | TTL and budget are enforced on read as well as on sweep | A stalled sweep must not serve expired bytes |
 | Every knob is clamped in `resolveConfig` | A stored or imported value can never exceed the ceiling, so a typo cannot fill the disk: the budget stops at 8 GB, and `0` means no cap at all |
 | `0` on the budget means TTL-only | `selectOverBudget` returns nothing, so eviction never runs and only expiry removes rows |
+| A session row never outlives its tab | `tabs.onRemoved` purges it and browser start empties the band, so a reused tab id can never inherit bytes |
+| Promotion is a move, never a copy | the upsert and the delete share one Dexie transaction, so a crash cannot leave the bytes in both bands |
+| A key the offline store already holds is touched, not copied | an awake page that reloads its own gallery must not double the bytes, and a wake must never demote a row |
+| Awake capture adds no manifest permission | it reuses the optional `scripting` + `<all_urls>` grant the enable switch already asks for, and the script runs only while the feature is on |
+| A read is refused before the body when `Content-Length` exceeds the ceiling | a 40 MB picture must not be downloaded into the worker to be thrown away |
+| One read is hard-capped at 64 MB whatever the config says | the ceiling is a user choice, the cap is memory safety |
 | Images never touch `chrome.storage` | That tier caps at 10 MB without `unlimitedStorage` and serializes to JSON |
 | A blocked swap restores the original URL | A strict `img-src` CSP must degrade to a normal network load, never a broken image |
 
@@ -60,7 +69,9 @@ graph LR
 
 ## Operations
 
-- Options → Images: enable switch, TTL, byte budget, per-image ceiling, pixel floor, live totals, per-host table, clear-all.
+- Options → Images: enable switch, awake capture switch, TTL, storage budget, awake budget, pictures per open tab, per-image ceiling, response byte floor, pixel floor, live totals for both bands, per-host table, clear-all (which clears both bands).
+- Options → Gallery: both bands in one grid, newest first, session rows tagged as a live tab.
 - Popup: clear the active tab site's entries.
-- Sweep: TTL deletion then LRU eviction, armed on the existing alarm cadence.
-- Storage location: IndexedDB `tabdorm` store `images`, inside the extension origin, covered by the existing `navigator.storage.persist()` request.
+- Sweep: TTL deletion then LRU eviction on the offline store, budget eviction on the session band, armed on the existing alarm cadence.
+- Storage location: IndexedDB `tabdorm` stores `images` and `sessionImages`, inside the extension origin, covered by the existing `navigator.storage.persist()` request.
+- Probe: open a gallery page, watch Options → Images totals rise before any suspend, then sleep the tab and confirm the rows moved to the offline band and the tab repaints.
