@@ -61,9 +61,14 @@ export function isCacheableImageUrl(
   return true;
 }
 
-/** Post-fetch filter: an empty body or one image past the ceiling is refused. */
+/**
+ * Post-fetch filter: an empty body or one image past the ceiling is refused.
+ * A ceiling of zero means "no ceiling", matching the byte budget: a real picture
+ * runs 1-10 MB, so a size cap is a choice, never a safety net.
+ */
 export function exceedsByteCeiling(bytes: number, config: ImageCacheConfig): boolean {
   if (!Number.isFinite(bytes) || bytes <= 0) return true;
+  if (config.maxImageKilobytes <= 0) return false;
   return bytes > config.maxImageKilobytes * 1024;
 }
 

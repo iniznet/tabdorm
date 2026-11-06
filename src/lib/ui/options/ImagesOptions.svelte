@@ -117,8 +117,8 @@
     <NumberField
       value={config.images.maxImageKilobytes}
       label="Skip images larger than"
-      hint="One hero banner can cost more than a page of thumbnails."
-      min={32}
+      hint="A full-size picture runs 1 to 10 MB. 0 = no cap, so every picture is kept and the storage budget decides instead."
+      min={0}
       max={8192}
       suffix="KB"
       onChange={(value) => onChange((draft) => (draft.images.maxImageKilobytes = value))}

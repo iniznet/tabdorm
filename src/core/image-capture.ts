@@ -112,12 +112,15 @@ function collectCandidates(limit: number, blobLimit: number): ImageCandidate[] {
  * it, so the worker cannot fetch one. FileReader hands back the original bytes as
  * a data url: no re-download, and full quality rather than a redrawn preview.
  */
-async function readBlobDataUrl(url: string, maxBytes: number): Promise<string> {
+async function readBlobDataUrl(url: string, maxKilobytes: number): Promise<string> {
   try {
     const response = await fetch(url);
     if (!response.ok) return '';
     const blob = await response.blob();
-    if (blob.size === 0 || blob.size > maxBytes) return '';
+    if (blob.size === 0) return '';
+    // Zero is "no ceiling", the same meaning it carries in the config and here,
+    // so a large picture is read whole instead of being refused before the read.
+    if (maxKilobytes > 0 && blob.size > maxKilobytes * 1024) return '';
     return await new Promise<string>((resolve) => {
       const reader = new FileReader();
       reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
@@ -275,7 +278,7 @@ export async function captureTabImages(tabId: number, pageUrl: string): Promise<
   // costs no bandwidth and keeps the original quality the page downloaded.
   let saved = 0;
   const now = Date.now();
-  const maxBytes = config.images.maxImageKilobytes * 1024;
+  const maxKilobytes = config.images.maxImageKilobytes;
   let harvested = 0;
   for (const candidate of candidates) {
     if (candidate.kind !== 'blob') continue;
@@ -286,7 +289,7 @@ export async function captureTabImages(tabId: number, pageUrl: string): Promise<
       const injections = await withDeadline(
         chrome.scripting.executeScript({
           target: { tabId },
-          args: [candidate.src, maxBytes],
+          args: [candidate.src, maxKilobytes],
           func: readBlobDataUrl,
         }),
         deadlineMs,
