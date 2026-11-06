@@ -43,6 +43,22 @@ export function shouldCaptureSize(bytes: number, config: ImageCacheConfig): bool
 }
 
 /**
+ * Refuses a response from its declared length, before the body is read. An
+ * unknown or zero length is not a refusal: the body then decides in
+ * `shouldCaptureSize`, and `hardCapBytes` still bounds the read itself.
+ */
+export function contentLengthRefused(
+  declaredLength: number,
+  config: ImageCacheConfig,
+  hardCapBytes: number,
+): boolean {
+  if (!Number.isFinite(declaredLength) || declaredLength <= 0) return false;
+  if (declaredLength > hardCapBytes) return true;
+  if (config.maxImageKilobytes <= 0) return false;
+  return declaredLength > config.maxImageKilobytes * 1024;
+}
+
+/**
  * A key already in the offline store is never copied into the session band. The
  * caller touches it instead, so an awake page that reloads its pictures cannot
  * double the bytes, and a wake never demotes a row.
