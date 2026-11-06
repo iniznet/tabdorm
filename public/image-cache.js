@@ -6,6 +6,16 @@
   const MAX_APPLY = 40;
   const SCHEDULE_MS = 60;
 
+  // Announce band: what this page shows, told to the worker as it loads, so a
+  // later suspend has nothing left to fetch. Bounded per page: a gallery can
+  // hold hundreds of pictures and every candidate costs the worker one read.
+  const ANNOUNCE_MS = 400;
+  const MAX_ANNOUNCE = 120;
+  const ANNOUNCE_BATCH = 40;
+  const announced = new Set();
+  let announceQueue = [];
+  let announceTimer;
+
   const pending = new Set();
   const requested = new Set();
   let scheduled = false;
@@ -33,10 +43,38 @@
     return Math.round(box.width) * Math.round(box.height);
   };
 
+  /** One candidate for the worker, at most once per page. */
+  const announce = (raw, pixels, kind) => {
+    const key = normalize(raw);
+    if (key === null || announced.has(key)) return;
+    if (announced.size >= MAX_ANNOUNCE) return;
+    announced.add(key);
+    announceQueue.push({ src: key, pixels, kind });
+    if (announceTimer === undefined) announceTimer = setTimeout(flushAnnounce, ANNOUNCE_MS);
+  };
+
+  const flushAnnounce = async () => {
+    announceTimer = undefined;
+    if (announceQueue.length === 0) return;
+    const items = announceQueue.slice(0, ANNOUNCE_BATCH);
+    announceQueue = announceQueue.slice(items.length);
+    try {
+      await chrome.runtime.sendMessage({ type: 'imageCandidates', pageUrl: location.href, items });
+    } catch {
+      // Worker restarting or extension reloading: the next batch carries on.
+    }
+    if (announceQueue.length > 0 && announceTimer === undefined) {
+      announceTimer = setTimeout(flushAnnounce, ANNOUNCE_MS);
+    }
+  };
+
   const scan = () => {
     for (const image of document.images) {
+      const raw = image.currentSrc || image.getAttribute('src') || '';
+      const natural = image.naturalWidth * image.naturalHeight;
+      announce(raw, natural > 0 ? natural : boxPixels(image), 'img');
       if (image.dataset.tabdormCached === '1') continue;
-      const key = normalize(image.currentSrc || image.getAttribute('src') || '');
+      const key = normalize(raw);
       if (key !== null && !requested.has(key)) pending.add(key);
     }
     const pattern = /^url\(\s*["']?([^"')]+)["']?\s*\)/;
@@ -47,8 +85,29 @@
       if (computed === 'none' || computed === '') continue;
       const match = pattern.exec(computed);
       if (match === null) continue;
+      announce(match[1], boxPixels(element), 'img');
       const key = normalize(match[1]);
       if (key !== null && !requested.has(key)) pending.add(key);
+    }
+  };
+
+  /**
+   * Pictures a viewer downloads itself and paints by script never appear as an
+   * <img> once replaced, so resource timing names them. No rendered box exists
+   * here, which is why the worker falls back to a byte floor for these.
+   */
+  const observeTransfers = () => {
+    if (typeof PerformanceObserver !== 'function') return;
+    try {
+      const observer = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          if (entry.initiatorType !== 'fetch' && entry.initiatorType !== 'xmlhttprequest') continue;
+          announce(entry.name, 0, 'fetch');
+        }
+      });
+      observer.observe({ type: 'resource', buffered: true });
+    } catch {
+      // No resource timing on this page: the <img> pass still runs.
     }
   };
 
@@ -136,6 +195,7 @@
   } else {
     schedule();
   }
+  observeTransfers();
   new MutationObserver(schedule).observe(document.documentElement, {
     childList: true,
     subtree: true,

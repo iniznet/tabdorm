@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  contentLengthRefused,
   promoteSessionRow,
   purgeRowsForTab,
   refuseReason,
@@ -48,6 +49,19 @@ test('the byte floor and the ceiling both bound a session read', () => {
   // Zero ceiling is no ceiling, the same meaning it carries offline.
   const uncapped = config({ maxImageKilobytes: 0 });
   assert.equal(shouldCaptureSize(40 * 1024 * 1024, uncapped), true);
+});
+
+test('a declared length can refuse a read before the body is fetched', () => {
+  const hard = 64 * 1024 * 1024;
+  const cfg = config();
+  assert.equal(contentLengthRefused(0, cfg, hard), false);
+  assert.equal(contentLengthRefused(Number.NaN, cfg, hard), false);
+  assert.equal(contentLengthRefused(512 * 1024, cfg, hard), false);
+  assert.equal(contentLengthRefused(512 * 1024 + 1, cfg, hard), true);
+  // The hard cap holds whatever the config says, including no ceiling.
+  const uncapped = config({ maxImageKilobytes: 0 });
+  assert.equal(contentLengthRefused(40 * 1024 * 1024, uncapped, hard), false);
+  assert.equal(contentLengthRefused(hard + 1, uncapped, hard), true);
 });
 
 test('a key the offline store already holds never enters the session band', () => {

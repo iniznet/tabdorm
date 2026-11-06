@@ -20,9 +20,20 @@ export type BackgroundRequest =
   | { type: 'dirtyForm' }
   | { type: 'clearDirtyForm' }
   | { type: 'imagesLookup'; pageUrl: string; keys: string[] }
+  | { type: 'imageCandidates'; pageUrl: string; items: AnnouncedImage[] }
   | { type: 'imagesStats' }
   | { type: 'imagesClearHost'; host: string }
   | { type: 'imagesClearAll' };
+
+/** One picture a page announced as it loaded. */
+export interface AnnouncedImage {
+  /** Absolute http(s) URL, already normalized by the page script. */
+  src: string;
+  /** Rendered area; 0 when only resource timing reported it. */
+  pixels: number;
+  /** `fetch` means no rendered box exists, so a byte floor decides instead. */
+  kind: 'img' | 'fetch';
+}
 
 export type BackgroundResponse =
   | { ok: true; payload?: unknown }
@@ -43,6 +54,7 @@ const REQUEST_TYPES: readonly RequestType[] = [
   'dirtyForm',
   'clearDirtyForm',
   'imagesLookup',
+  'imageCandidates',
   'imagesStats',
   'imagesClearHost',
   'imagesClearAll',
@@ -77,6 +89,35 @@ export function parseBackgroundRequest(raw: unknown): { ok: true; request: Backg
         return { ok: false, error: 'imagesClearHost requires a host.' };
       }
       return { ok: true, request: { type, host } };
+    }
+    case 'imageCandidates': {
+      const pageUrl = candidate['pageUrl'];
+      const items = candidate['items'];
+      if (typeof pageUrl !== 'string' || pageUrl === '') {
+        return { ok: false, error: 'imageCandidates requires a pageUrl.' };
+      }
+      if (!Array.isArray(items) || items.length === 0 || items.length > 60) {
+        return { ok: false, error: 'imageCandidates requires 1 to 60 items.' };
+      }
+      const clean: AnnouncedImage[] = [];
+      for (const item of items) {
+        if (typeof item !== 'object' || item === null) return { ok: false, error: 'An announced image must be an object.' };
+        const entry = item as Record<string, unknown>;
+        const src = entry['src'];
+        const pixels = entry['pixels'];
+        const kind = entry['kind'];
+        if (typeof src !== 'string' || src === '' || src.length > 2_048) {
+          return { ok: false, error: 'An announced image needs a src of at most 2048 characters.' };
+        }
+        if (typeof pixels !== 'number' || !Number.isFinite(pixels) || pixels < 0) {
+          return { ok: false, error: 'An announced image needs a pixels count.' };
+        }
+        if (kind !== 'img' && kind !== 'fetch') {
+          return { ok: false, error: 'An announced image needs kind img or fetch.' };
+        }
+        clean.push({ src, pixels, kind });
+      }
+      return { ok: true, request: { type, pageUrl, items: clean } };
     }
     case 'imagesLookup': {
       const pageUrl = candidate['pageUrl'];
