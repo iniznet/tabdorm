@@ -174,7 +174,7 @@ const PREVIEW_EDGE = 480;
  * no DOM, so the downscale runs on an OffscreenCanvas; any failure leaves the
  * record without a preview and the grid falls back to the original.
  */
-async function makePreview(blob: Blob): Promise<Blob | null> {
+export async function makePreview(blob: Blob): Promise<Blob | null> {
   try {
     const bitmap = await createImageBitmap(blob);
     const box = fitWithin(bitmap.width, bitmap.height, PREVIEW_EDGE);
