@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  canvasImageKey,
   exceedsByteCeiling,
   fitWithin,
   formatByteSize,
@@ -142,6 +143,14 @@ test('gallery pages walk a stable store without repeating a key', () => {
   assert.deepEqual(nextGalleryWindow(55, 0, 24), { offset: 0, limit: 24 });
   assert.deepEqual(nextGalleryWindow(55, 24, 24), { offset: 24, limit: 24 });
   assert.deepEqual(nextGalleryWindow(55, 48, 24), { offset: 48, limit: 7 });
+});
+
+test('canvas keys sit outside the url space, so replay can never match one', () => {
+  const key = canvasImageKey('https://a.test/view', 0);
+  assert.equal(key, 'https://a.test/view#canvas-0');
+  // The url key of the same page is the same minus the fragment: two spaces, no collision.
+  assert.equal(normalizeImageKey(key, key), 'https://a.test/view');
+  assert.notEqual(canvasImageKey('https://a.test/view', 1), key);
 });
 
 test('capture keeps the biggest candidates, not the first ones', () => {

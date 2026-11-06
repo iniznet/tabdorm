@@ -137,6 +137,16 @@ export function fitWithin(
   return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
 }
 
+/**
+ * Key for a frame exported from a canvas. Deliberately not a URL, and never
+ * normalized: a viewer that paints into a canvas leaves no image URL behind, so
+ * the replay script can never match this record. It exists for the gallery and
+ * the tab-list thumbnail, nothing else.
+ */
+export function canvasImageKey(pageUrl: string, index: number): string {
+  return `${pageUrl}#canvas-${index}`;
+}
+
 /** Human byte size for readouts: `0 B`, `940 B`, `12.4 KB`, `1.8 MB`. */
 export function formatByteSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';

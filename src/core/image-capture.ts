@@ -1,5 +1,6 @@
 import { getConfig } from './config-store';
 import {
+  canvasImageKey,
   exceedsByteCeiling,
   fitWithin,
   hostOfUrl,
@@ -23,6 +24,12 @@ import type { CachedImage, ImageCacheConfig } from '@/types';
 /** Candidates per page: a gallery can hold hundreds, and each one costs a fetch. */
 const MAX_CANDIDATES = 60;
 
+/** Canvas frames per page: each one is read out of the renderer, never fetched. */
+const MAX_CANVAS = 6;
+
+/** Smallest canvas worth keeping, matching the pixel floor spirit of the config. */
+const MIN_CANVAS_PIXELS = 40_000;
+
 /**
  * Candidates read from the page before selection. Reading more than the fetch cap
  * is what lets the biggest pictures win; a page returns DOM order, not importance.
@@ -35,18 +42,20 @@ const MAX_PARALLEL = 4;
 interface ImageCandidate {
   src: string;
   pixels: number;
+  /** True when `src` is a data URL exported from a canvas, so it is never fetched. */
+  canvas: boolean;
 }
 
 /**
  * Runs inside the page. `executeScript` serialises the source, so this closes
  * over nothing: the limit arrives as an argument.
  */
-function collectCandidates(limit: number): ImageCandidate[] {
+function collectCandidates(limit: number, canvasLimit: number, canvasMinPixels: number): ImageCandidate[] {
   const out: ImageCandidate[] = [];
   const push = (raw: string | null | undefined, pixels: number): void => {
     if (typeof raw !== 'string' || raw.length === 0) return;
     if (out.length >= limit) return;
-    out.push({ src: raw, pixels });
+    out.push({ src: raw, pixels, canvas: false });
   };
 
   for (const image of Array.from(document.images)) {
@@ -64,6 +73,25 @@ function collectCandidates(limit: number): ImageCandidate[] {
     if (raw === undefined) continue;
     const box = element.getBoundingClientRect();
     push(raw, Math.round(box.width) * Math.round(box.height));
+  }
+
+  // A canvas leaves no URL behind: a viewer that paints into one has nothing to
+  // fetch. Export the frame itself so the picture still reaches the gallery.
+  // A tainted canvas throws on toDataURL and is skipped, never a capture failure.
+  let canvases = 0;
+  for (const canvas of Array.from(document.querySelectorAll('canvas'))) {
+    if (canvases >= canvasLimit) break;
+    const pixels = canvas.width * canvas.height;
+    if (pixels < canvasMinPixels) continue;
+    let data = '';
+    try {
+      data = canvas.toDataURL('image/webp', 0.75);
+    } catch {
+      continue;
+    }
+    if (!data.startsWith('data:image/')) continue;
+    out.push({ src: data, pixels, canvas: true });
+    canvases += 1;
   }
 
   return out;
@@ -191,7 +219,7 @@ export async function captureTabImages(tabId: number, pageUrl: string): Promise<
     const injections = await withDeadline(
       chrome.scripting.executeScript({
         target: { tabId },
-        args: [MAX_COLLECTED],
+        args: [MAX_COLLECTED, MAX_CANVAS, MIN_CANVAS_PIXELS],
         func: collectCandidates,
       }),
       deadlineMs,
@@ -205,10 +233,37 @@ export async function captureTabImages(tabId: number, pageUrl: string): Promise<
   }
   if (candidates.length === 0) return 0;
 
+  // Canvas frames first: they cost no network and no budget wait, and they are
+  // the only record a canvas-only viewer can produce.
+  let saved = 0;
+  const now = Date.now();
+  let canvasIndex = 0;
+  for (const candidate of candidates) {
+    if (!candidate.canvas) continue;
+    try {
+      const blob = await (await fetch(candidate.src)).blob();
+      if (exceedsByteCeiling(blob.size, config.images)) continue;
+      await putImage({
+        key: canvasImageKey(pageUrl, canvasIndex),
+        host,
+        pageUrl,
+        mime: blob.type === '' ? 'image/webp' : blob.type,
+        size: blob.size,
+        savedAt: now,
+        lastUsed: now,
+        blob,
+      });
+      saved += 1;
+    } catch {
+      // A frame that cannot be decoded is skipped; the sweep never fails on it.
+    }
+    canvasIndex += 1;
+  }
+
   // Resolve keys once, in reader-visible order, so the budget follows importance.
   const targets: string[] = [];
   const queued = new Set<string>();
-  for (const candidate of selectCaptureCandidates(candidates, MAX_CANDIDATES)) {
+  for (const candidate of selectCaptureCandidates(candidates.filter((entry) => !entry.canvas), MAX_CANDIDATES)) {
     if (!isCacheableImageUrl(candidate.src, pageUrl, candidate.pixels, config.images)) continue;
     const key = normalizeImageKey(candidate.src, pageUrl);
     if (key === null || queued.has(key)) continue;
@@ -221,10 +276,9 @@ export async function captureTabImages(tabId: number, pageUrl: string): Promise<
   // seconds on what is new instead of re-downloading what it wrote last time.
   const held = new Set((await readImages(targets)).map((row) => row.key));
   const fresh = targets.filter((key) => !held.has(key));
-  if (fresh.length === 0) return 0;
+  if (fresh.length === 0) return saved;
 
   let cursor = 0;
-  let saved = 0;
 
   const worker = async (): Promise<void> => {
     for (;;) {
