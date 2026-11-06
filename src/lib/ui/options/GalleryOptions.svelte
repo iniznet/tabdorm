@@ -2,8 +2,8 @@
   import { onMount } from 'svelte';
   import Icon from '@/lib/ui/Icon.svelte';
   import { formatByteSize, nextGalleryWindow } from '@/core/image-cache';
-  import { imageGalleryPage, imageTotals } from '@/core/image-store';
-  import type { CachedImage, TabDormConfig } from '@/types';
+  import { imageGalleryCount, imageGalleryPage, imageTotals, sessionTotals } from '@/core/image-store';
+  import type { GalleryImage, TabDormConfig } from '@/types';
 
   interface Props {
     config: TabDormConfig;
@@ -26,6 +26,8 @@
     preview: string;
     /** Original bytes, kept un-decoded until the reader presses the tile. */
     blob: Blob;
+    /** Which band the row came from: a live tab's copy, or a sleeping one's. */
+    origin: 'session' | 'offline';
   }
 
   let cards = $state<Card[]>([]);
@@ -48,11 +50,20 @@
     liveUrls.clear();
   }
 
-  function toCard(row: CachedImage): Card {
+  function toCard(row: GalleryImage): Card {
     // Records from before previews, and images already small, paint the original.
     const preview = URL.createObjectURL(row.preview ?? row.blob);
     liveUrls.add(preview);
-    return { key: row.key, host: row.host, pageUrl: row.pageUrl, size: row.size, savedAt: row.savedAt, preview, blob: row.blob };
+    return {
+      key: row.key,
+      host: row.host,
+      pageUrl: row.pageUrl,
+      size: row.size,
+      savedAt: row.savedAt,
+      preview,
+      blob: row.blob,
+      origin: row.origin,
+    };
   }
 
   function formatDay(ts: number): string {
@@ -86,9 +97,9 @@
     loading = true;
     error = '';
     try {
-      const totals = await imageTotals();
-      total = totals.count;
-      bytes = totals.bytes;
+      const [allCount, totals, live] = await Promise.all([imageGalleryCount(), imageTotals(), sessionTotals()]);
+      total = allCount;
+      bytes = totals.bytes + live.bytes;
       await loadMore();
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'The cache could not be read.';
@@ -230,7 +241,9 @@
             </span>
             <span class="block px-2 py-1.5">
               <span class="block truncate text-[12px] text-ink" title={card.pageUrl}>{card.host}</span>
-              <span class="block truncate text-[11px] text-faint">{formatByteSize(card.size)} · {formatDay(card.savedAt)}</span>
+              <span class="block truncate text-[11px] text-faint">
+                {formatByteSize(card.size)} · {formatDay(card.savedAt)}{card.origin === 'session' ? ' · live tab' : ''}
+              </span>
             </span>
           </button>
         {/each}

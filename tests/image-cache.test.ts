@@ -23,6 +23,10 @@ const config = (overrides: Partial<ImageCacheConfig> = {}): ImageCacheConfig => 
   maxMegabytes: 64,
   maxImageKilobytes: 512,
   minPixels: 4_096,
+  minBytes: 8_192,
+  autoCapture: true,
+  sessionMaxImages: 200,
+  sessionMaxMegabytes: 64,
   captureDeadlineMs: 1_500,
   ...overrides,
 });
