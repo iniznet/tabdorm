@@ -93,6 +93,12 @@
       onChange={(v) => onChange((d) => (d.groups.collapseOnSwitch = v))}
     />
     <Toggle
+      checked={config.groups.collapseOtherGroups}
+      label="Collapse every other group when you switch into one"
+      hint="Fold back every expanded group except the one you land in. Their tabs sleep too when suspension on collapse is on."
+      onChange={(v) => onChange((d) => (d.groups.collapseOtherGroups = v))}
+    />
+    <Toggle
       checked={config.groups.suspendOnGroupCollapse}
       label="Suspend all tabs when a group collapses"
       hint="Applies to every collapse source — automatic or your own manual collapse."

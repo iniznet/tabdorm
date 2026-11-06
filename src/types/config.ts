@@ -80,6 +80,8 @@ export interface TabDormConfig {
   groups: {
     suspendOnGroupCollapse: boolean;
     collapseOnSwitch: boolean;
+    /** Fold every expanded group except the one you land in. */
+    collapseOtherGroups: boolean;
     autoCollapseOnIdleMinutes: number;
     /** Move the activated group to one end of the strip. */
     orderOnActivate: GroupOrderMode;

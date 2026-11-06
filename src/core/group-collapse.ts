@@ -9,6 +9,7 @@ import { evaluateSuspension } from './suspension';
 import {
   canCollapseGroup,
   pickCollapseTarget,
+  selectGroupsToCollapse,
   selectIdleGroups,
   type IdleGroupCandidate,
 } from './group-collapse-rules';
@@ -66,10 +67,32 @@ async function handleActivation(info: { tabId: number; windowId: number }): Prom
     return previous;
   });
   const config = await getConfig();
-  if (config.groups.collapseOnSwitch && prevTabId !== undefined && prevTabId !== info.tabId) {
+  if (config.groups.collapseOtherGroups) {
+    // The broader rule absorbs the previous-group one: folding every other group
+    // already folds the group just left.
+    await collapseOtherGroups(info.windowId, info.tabId);
+  } else if (config.groups.collapseOnSwitch && prevTabId !== undefined && prevTabId !== info.tabId) {
     await collapseLeftGroup(prevTabId, info.tabId);
   }
   await applyActiveGroupOrder(info.windowId, info.tabId, config.groups.orderOnActivate);
+}
+
+/** Fold every expanded group except the one holding the tab now in use. */
+async function collapseOtherGroups(windowId: number, tabId: number): Promise<void> {
+  const [tabs, groups] = await Promise.all([
+    chrome.tabs.query({ windowId }).catch(() => [] as chrome.tabs.Tab[]),
+    chrome.tabGroups.query({ windowId }).catch(() => [] as chrome.tabGroups.TabGroup[]),
+  ]);
+  const active = tabs.find((tab) => tab.id === tabId);
+  if (active === undefined) return;
+  const targets = selectGroupsToCollapse(
+    groups.map((group) => ({ groupId: group.id, collapsed: group.collapsed === true })),
+    active.groupId,
+  );
+  // One at a time on purpose: each fold fires tabGroups.onUpdated, which runs the
+  // suspension reaction, and a burst of concurrent discards costs the reader's
+  // machine more than the memory the burst frees.
+  for (const groupId of targets) await collapseGroupIfSafe(groupId);
 }
 
 /** Collapse-on-switch step: fold the group the user just left. */
