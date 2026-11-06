@@ -5,40 +5,34 @@ import { getDirtyFormTabs } from './form-guard';
 import { discardTabSafe } from './discard';
 import { safeTabUrl } from './sanitize';
 import { evaluateSuspension } from './suspension';
+import {
+  canCollapseGroup,
+  pickCollapseTarget,
+  selectIdleGroups,
+  type IdleGroupCandidate,
+} from './group-collapse-rules';
+import { applyActiveGroupOrder } from './move-groups';
 
 const GROUP_NONE = -1;
 const PREV_ACTIVE_KEY = 'tabdorm:prevActiveByWindow';
 
 type PrevActiveMap = Record<string, number>;
 
-/** Pure: which group a switch should collapse, or null when none qualifies. */
-export function pickCollapseTarget(prevGroupId: number, newGroupId: number): number | null {
-  if (prevGroupId === GROUP_NONE) return null;
-  if (newGroupId === prevGroupId) return null;
-  return prevGroupId;
-}
+/**
+ * Serialized read-modify-write chain. Activations arrive in bursts when a window
+ * restores or several tabs open at once, and chrome.storage.session offers no
+ * transactional update: two parallel handlers read the same map and the later write
+ * wins, so the real previous tab is lost and collapse-on-switch goes quiet.
+ */
+let chain: Promise<unknown> = Promise.resolve();
 
-export interface IdleGroupCandidate {
-  groupId: number;
-  collapsed: boolean;
-  /** Per-member last-activity timestamps (ms epoch). */
-  memberActivity: number[];
-  hasActiveTabInFocusedWindow: boolean;
-}
-
-/** Pure: uncollapsed groups idle past the threshold with no focused-window active tab. 0 disables. */
-export function selectIdleGroups(candidates: IdleGroupCandidate[], thresholdMs: number, now: number): number[] {
-  if (thresholdMs <= 0) return [];
-  const cutoff = now - thresholdMs;
-  return candidates
-    .filter(
-      (c) =>
-        !c.collapsed &&
-        !c.hasActiveTabInFocusedWindow &&
-        c.memberActivity.length > 0 &&
-        Math.max(...c.memberActivity) <= cutoff,
-    )
-    .map((c) => c.groupId);
+function serialize<T>(task: () => Promise<T>): Promise<T> {
+  const run = chain.then(task, task);
+  chain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
 }
 
 async function readPrevActive(): Promise<PrevActiveMap> {
@@ -73,20 +67,59 @@ export function initGroupCollapse(): void {
 }
 
 async function handleActivation(info: { tabId: number; windowId: number }): Promise<void> {
-  const map = await readPrevActive();
-  const prevTabId = map[String(info.windowId)];
-  map[String(info.windowId)] = info.tabId;
-  await chrome.storage.session.set({ [PREV_ACTIVE_KEY]: map });
+  const prevTabId = await serialize(async () => {
+    const map = await readPrevActive();
+    const previous = map[String(info.windowId)];
+    map[String(info.windowId)] = info.tabId;
+    await chrome.storage.session.set({ [PREV_ACTIVE_KEY]: map });
+    return previous;
+  });
   const config = await getConfig();
-  if (!config.groups.collapseOnSwitch || prevTabId === undefined || prevTabId === info.tabId) return;
+  if (config.groups.collapseOnSwitch && prevTabId !== undefined && prevTabId !== info.tabId) {
+    await collapseLeftGroup(prevTabId, info.tabId);
+  }
+  await applyActiveGroupOrder(info.windowId, info.tabId, config.groups.orderOnActivate);
+}
+
+/** Collapse-on-switch step: fold the group the user just left. */
+async function collapseLeftGroup(prevTabId: number, newTabId: number): Promise<void> {
   const [prevTab, newTab] = await Promise.all([
     chrome.tabs.get(prevTabId).catch(() => undefined),
-    chrome.tabs.get(info.tabId).catch(() => undefined),
+    chrome.tabs.get(newTabId).catch(() => undefined),
   ]);
   if (prevTab === undefined || newTab === undefined) return;
   const target = pickCollapseTarget(prevTab.groupId, newTab.groupId);
   if (target === null || target === GROUP_NONE) return;
-  await chrome.tabGroups.update(target, { collapsed: true }).catch(() => undefined);
+  await collapseGroupIfSafe(target);
+}
+
+/**
+ * The single collapse write. Every source funnels here, so the invariant that a
+ * collapse never takes the active tab with it lives once instead of per caller.
+ *
+ * The guard reads live state at write time on purpose. Handlers await storage and
+ * config first, so a burst of activations leaves their decisions stale. Folding the
+ * group the user has just returned to makes Chromium activate a neighbour, which
+ * fires another activation and folds the next group: one stale decision cascades
+ * until the strip has collapsed every group at once.
+ */
+export async function collapseGroupIfSafe(groupId: number): Promise<boolean> {
+  const [group, tabs] = await Promise.all([
+    chrome.tabGroups.get(groupId).catch(() => undefined),
+    chrome.tabs.query({ groupId }).catch(() => [] as chrome.tabs.Tab[]),
+  ]);
+  const allowed = canCollapseGroup({
+    exists: group !== undefined,
+    collapsed: group?.collapsed === true,
+    holdsActiveTab: tabs.some((tab) => tab.active),
+  });
+  if (!allowed) return false;
+  try {
+    await chrome.tabGroups.update(groupId, { collapsed: true });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Discards a just-collapsed group's inactive tabs through the forced-idle matrix. */
@@ -157,8 +190,9 @@ export async function collapseIdleGroups(): Promise<number> {
     });
   }
   const targets = selectIdleGroups(candidates, thresholdMs, Date.now());
+  let collapsed = 0;
   for (const groupId of targets) {
-    await chrome.tabGroups.update(groupId, { collapsed: true }).catch(() => undefined);
+    if (await collapseGroupIfSafe(groupId)) collapsed += 1;
   }
-  return targets.length;
+  return collapsed;
 }
