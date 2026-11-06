@@ -8,6 +8,7 @@ import {
   type Activation,
   type MruEntry,
 } from './close-focus';
+import { createSerializer } from './serialize';
 import type { TabDormConfig } from '@/types';
 
 /**
@@ -45,20 +46,8 @@ const pending = new Map<number, PendingRestore>();
 /** Newest activation seen per window, with its timestamp. */
 const lastActivation = new Map<number, Activation>();
 
-/**
- * Serialized read-modify-write chain. Activations, group moves, and removals
- * arrive in bursts and chrome.storage.session offers no transactional update.
- */
-let chain: Promise<unknown> = Promise.resolve();
-
-function serialize<T>(task: () => Promise<T>): Promise<T> {
-  const run = chain.then(task, task);
-  chain = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  return run;
-}
+/** One queue for this module's history writes. */
+const serialize = createSerializer();
 
 async function readHistory(): Promise<HistoryMap> {
   const stored = await chrome.storage.session.get(HISTORY_KEY);

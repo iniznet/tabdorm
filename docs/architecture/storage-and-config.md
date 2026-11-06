@@ -23,6 +23,11 @@ TabDorm uses three storage tiers, each matched to the volatility of its data:
 - `navigator.storage.persist()` is requested so the browser treats history as durable; if denied, a warning is logged.
 - The Options page shows a live `navigator.storage.estimate()` readout.
 
+## Write discipline
+
+- Every read-modify-write cycle owns one queue: `createSerializer()` in `core/serialize.ts` returns a `serialize()` bound to a private chain, declared once at module scope. Neither storage tier has a transactional update, so a cycle that writes a shared map without one loses writes under bursts of tab events.
+- Separate modules keep separate queues on purpose. One shared queue would put unrelated keys behind a single lock.
+
 ## Volatile session storage
 
 Activity data deliberately lives in `chrome.storage.session`: it is cheap, per-browser-run, and its wipe-on-restart is exactly what the cold-start seed relies on (a one-time flag distinguishes a fresh browser run from a mere service-worker restart).

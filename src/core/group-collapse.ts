@@ -4,6 +4,7 @@ import { getConfig } from './config-store';
 import { getDirtyFormTabs } from './form-guard';
 import { discardTabSafe } from './discard';
 import { safeTabUrl } from './sanitize';
+import { createSerializer } from './serialize';
 import { evaluateSuspension } from './suspension';
 import {
   canCollapseGroup,
@@ -19,21 +20,11 @@ const PREV_ACTIVE_KEY = 'tabdorm:prevActiveByWindow';
 type PrevActiveMap = Record<string, number>;
 
 /**
- * Serialized read-modify-write chain. Activations arrive in bursts when a window
- * restores or several tabs open at once, and chrome.storage.session offers no
- * transactional update: two parallel handlers read the same map and the later write
- * wins, so the real previous tab is lost and collapse-on-switch goes quiet.
+ * One queue for this module's previous-tab writes. Activations arrive in bursts
+ * when a window restores or several tabs open at once, and the later write would
+ * otherwise win, losing the real previous tab.
  */
-let chain: Promise<unknown> = Promise.resolve();
-
-function serialize<T>(task: () => Promise<T>): Promise<T> {
-  const run = chain.then(task, task);
-  chain = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  return run;
-}
+const serialize = createSerializer();
 
 async function readPrevActive(): Promise<PrevActiveMap> {
   const stored = await chrome.storage.session.get(PREV_ACTIVE_KEY);
