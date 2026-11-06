@@ -26,6 +26,13 @@
   let inlineCount = 0;
   let inlineBytes = 0;
 
+  // One summary line per page, so a page that keeps nothing names its own reason
+  // instead of leaving a silent zero in the panel.
+  const SUMMARY_MS = 6000;
+  let seenCount = 0;
+  let inlineSent = 0;
+  let inlineUnreadable = 0;
+
   const pending = new Set();
   const requested = new Set();
   let scheduled = false;
@@ -57,6 +64,7 @@
   const announce = (raw, pixels, kind) => {
     const key = normalize(raw);
     if (key === null || announced.has(key)) return;
+    seenCount += 1;
     // A picture with no rendered box yet is not decided here: the load event
     // announces it again with its real area, and an invisible one stays out.
     if (kind === 'img' && pixels <= 0) return;
@@ -107,10 +115,14 @@
     announced.add(seen);
     inlineCount += 1;
     const dataUrl = await readInline(raw);
-    if (dataUrl === null || !dataUrl.startsWith('data:image/')) return;
+    if (dataUrl === null || !dataUrl.startsWith('data:image/')) {
+      inlineUnreadable += 1;
+      return;
+    }
     const bytes = Math.floor((dataUrl.length * 3) / 4);
     if (bytes > MAX_INLINE_ITEM_BYTES || inlineBytes + bytes > MAX_INLINE_TOTAL_BYTES) return;
     inlineBytes += bytes;
+    inlineSent += 1;
     announceQueue.push({ src: raw, pixels, kind: 'inline', dataUrl });
     if (announceTimer !== undefined) {
       clearTimeout(announceTimer);
@@ -134,29 +146,82 @@
     }
   };
 
-  const scan = () => {
-    for (const image of document.images) {
-      const raw = image.currentSrc || image.getAttribute('src') || '';
-      const natural = image.naturalWidth * image.naturalHeight;
-      const pixels = natural > 0 ? natural : boxPixels(image);
-      announce(raw, pixels, 'img');
-      void announceInline(raw, pixels);
-      if (image.dataset.tabdormCached === '1') continue;
-      const key = normalize(raw);
-      if (key !== null && !requested.has(key)) pending.add(key);
+  // An injected viewer keeps its pictures in a shadow root to isolate its styles,
+  // so the light DOM is not the whole page. Roots are walked breadth first and
+  // capped, and each root is observed once so a later render needs no extra walk.
+  const MAX_WALKED = 4000;
+  const MAX_ROOT_DEPTH = 5;
+  const observedRoots = new WeakSet();
+  const mutationObserver = new MutationObserver(() => schedule());
+
+  const watchRoot = (root) => {
+    if (observedRoots.has(root)) return;
+    observedRoots.add(root);
+    try {
+      mutationObserver.observe(root, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['src', 'style'],
+      });
+    } catch {
+      // A detached root refuses observation: the next scan walks it again.
     }
+  };
+
+  /** Every root this page paints into: the document, then its shadow trees. */
+  const rootsOf = () => {
+    const roots = [document];
+    const seen = new Set(roots);
+    let walked = 0;
+    for (let index = 0; index < roots.length && index < MAX_ROOT_DEPTH; index += 1) {
+      const root = roots[index];
+      let elements;
+      try {
+        elements = root.querySelectorAll('*');
+      } catch {
+        continue;
+      }
+      for (const element of elements) {
+        walked += 1;
+        if (walked > MAX_WALKED) return roots;
+        const shadow = element.shadowRoot;
+        if (shadow === null || shadow === undefined || seen.has(shadow)) continue;
+        seen.add(shadow);
+        roots.push(shadow);
+      }
+    }
+    return roots;
+  };
+
+  const scan = () => {
     const pattern = /^url\(\s*["']?([^"')]+)["']?\s*\)/;
-    for (const element of document.querySelectorAll('body *')) {
-      if (element.dataset.tabdormCachedBackground === '1') continue;
-      if (boxPixels(element) <= 0) continue;
-      const computed = getComputedStyle(element).backgroundImage;
-      if (computed === 'none' || computed === '') continue;
-      const match = pattern.exec(computed);
-      if (match === null) continue;
-      announce(match[1], boxPixels(element), 'img');
-      void announceInline(match[1], boxPixels(element));
-      const key = normalize(match[1]);
-      if (key !== null && !requested.has(key)) pending.add(key);
+    for (const root of rootsOf()) {
+      watchRoot(root);
+      for (const image of root.querySelectorAll('img')) {
+        const raw = image.currentSrc || image.getAttribute('src') || '';
+        const natural = image.naturalWidth * image.naturalHeight;
+        const pixels = natural > 0 ? natural : boxPixels(image);
+        announce(raw, pixels, 'img');
+        void announceInline(raw, pixels);
+        if (image.dataset.tabdormCached === '1') continue;
+        const key = normalize(raw);
+        if (key !== null && !requested.has(key)) pending.add(key);
+      }
+      for (const element of root.querySelectorAll('*')) {
+        if (element.tagName === 'IMG') continue;
+        if (element.dataset.tabdormCachedBackground === '1') continue;
+        const area = boxPixels(element);
+        if (area <= 0) continue;
+        const computed = getComputedStyle(element).backgroundImage;
+        if (computed === 'none' || computed === '') continue;
+        const match = pattern.exec(computed);
+        if (match === null) continue;
+        announce(match[1], area, 'img');
+        void announceInline(match[1], area);
+        const key = normalize(match[1]);
+        if (key !== null && !requested.has(key)) pending.add(key);
+      }
     }
   };
 
@@ -277,6 +342,14 @@
     true,
   );
   observeTransfers();
+  // A page keeps painting after load, so this is a snapshot, not a verdict.
+  setTimeout(() => {
+    if (seenCount === 0) return;
+    console.info(
+      '[tabdorm] pictures on this page: ' + seenCount + ' seen, ' + inlineSent +
+        ' page-held sent, ' + inlineUnreadable + ' unreadable',
+    );
+  }, SUMMARY_MS);
   new MutationObserver(schedule).observe(document.documentElement, {
     childList: true,
     subtree: true,
