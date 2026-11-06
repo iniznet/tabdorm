@@ -71,6 +71,10 @@ test('the byte ceiling refuses empty bodies and oversized images', () => {
   assert.equal(exceedsByteCeiling(Number.NaN, config()), true);
   assert.equal(exceedsByteCeiling(512 * 1024, config()), false);
   assert.equal(exceedsByteCeiling(512 * 1024 + 1, config()), true);
+  // Zero is no ceiling: a 40 MB picture is kept, and an empty body still is not.
+  const uncapped = config({ maxImageKilobytes: 0 });
+  assert.equal(exceedsByteCeiling(40 * 1024 * 1024, uncapped), false);
+  assert.equal(exceedsByteCeiling(0, uncapped), true);
   assert.equal(exceedsByteCeiling(900 * 1024, config({ maxImageKilobytes: 1_024 })), false);
 });
 
