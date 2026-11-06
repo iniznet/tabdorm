@@ -60,7 +60,9 @@ export async function applyImageCacheSync(config: TabDormConfig): Promise<void> 
       matches: ['<all_urls>'],
       js: ['image-cache.js'],
       runAt: 'document_start',
-      allFrames: false,
+      // A viewer can paint its pictures inside a subframe, so every frame is
+      // covered. Each frame keeps its own announce caps.
+      allFrames: true,
       persistAcrossSessions: true,
     }]);
   } catch (error) {

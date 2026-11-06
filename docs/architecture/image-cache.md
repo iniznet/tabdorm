@@ -52,6 +52,8 @@ graph LR
 | Promotion is a move, never a copy | the upsert and the delete share one Dexie transaction, so a crash cannot leave the bytes in both bands |
 | A key the offline store already holds is touched, not copied | an awake page that reloads its own gallery must not double the bytes, and a wake must never demote a row |
 | An inline picture is read in the page, never by the worker | a `blob:` url resolves only in the context that created it, and a `data:` url carries its own bytes, so the worker's fetch can reach neither |
+| The announce band walks every root the page paints into | an injected viewer overlay keeps its DOM in an open shadow root, which `document.images` never enters, so the light DOM alone reports a false zero |
+| The announce band runs in every frame | a viewer that renders its pictures inside a subframe is otherwise invisible, and each frame keeps its own announce caps |
 | An inline row is keyed by its own digest | a viewer mints a fresh `blob:` uuid on every render, so a url key would pile up copies of one picture, and the digest makes the session key agree with the offline one |
 | Awake capture adds no manifest permission | it reuses the optional `scripting` + `<all_urls>` grant the enable switch already asks for, and the script runs only while the feature is on |
 | A read is refused before the body when `Content-Length` exceeds the ceiling | a 40 MB picture must not be downloaded into the worker to be thrown away |
@@ -78,3 +80,4 @@ graph LR
 - Storage location: IndexedDB `tabdorm` stores `images` and `sessionImages`, inside the extension origin, covered by the existing `navigator.storage.persist()` request.
 - Probe: open a gallery page, watch Options → Images totals rise before any suspend, then sleep the tab and confirm the rows moved to the offline band and the tab repaints.
 - Probe for a viewer that paints `blob:` pictures: Options → Images rises while the tab stays awake, and each row is one picture rather than a fresh copy per render.
+- The page prints one line six seconds after load: `[tabdorm] pictures on this page: N seen, M page-held sent, K unreadable`. A page that keeps nothing names its own reason there. A closed shadow root stays unreadable by design.
