@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   canCollapseGroup,
   pickCollapseTarget,
+  selectGroupsToCollapse,
   selectIdleGroups,
   type IdleGroupCandidate,
 } from '../src/core/group-collapse-rules.ts';
@@ -56,4 +57,44 @@ test('a collapse write is refused for the active group', () => {
   assert.equal(canCollapseGroup({ exists: true, collapsed: false, holdsActiveTab: false }), true);
   assert.equal(canCollapseGroup({ exists: false, collapsed: false, holdsActiveTab: false }), false);
   assert.equal(canCollapseGroup({ exists: true, collapsed: true, holdsActiveTab: false }), false);
+});
+
+test('every expanded group folds except the one you land in', () => {
+  const groups = [
+    { groupId: 1, collapsed: false },
+    { groupId: 2, collapsed: false },
+    { groupId: 3, collapsed: false },
+  ];
+  assert.deepEqual(selectGroupsToCollapse(groups, 2), [1, 3]);
+});
+
+test('the active group is never a target, however the list is ordered', () => {
+  const groups = [
+    { groupId: 5, collapsed: false },
+    { groupId: 9, collapsed: false },
+  ];
+  assert.deepEqual(selectGroupsToCollapse(groups, 5), [9]);
+  assert.deepEqual(selectGroupsToCollapse([...groups].reverse(), 5), [9]);
+});
+
+test('a group already folded is left alone', () => {
+  const groups = [
+    { groupId: 1, collapsed: true },
+    { groupId: 2, collapsed: false },
+    { groupId: 3, collapsed: false },
+  ];
+  assert.deepEqual(selectGroupsToCollapse(groups, 3), [2]);
+});
+
+test('landing on an ungrouped tab folds nothing', () => {
+  const groups = [
+    { groupId: 1, collapsed: false },
+    { groupId: 2, collapsed: false },
+  ];
+  assert.deepEqual(selectGroupsToCollapse(groups, -1), []);
+});
+
+test('one group only: nothing to fold', () => {
+  assert.deepEqual(selectGroupsToCollapse([{ groupId: 4, collapsed: false }], 4), []);
+  assert.deepEqual(selectGroupsToCollapse([], 4), []);
 });

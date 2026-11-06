@@ -13,6 +13,29 @@ export function pickCollapseTarget(prevGroupId: number, newGroupId: number): num
   return prevGroupId;
 }
 
+export interface GroupCollapseCandidate {
+  groupId: number;
+  collapsed: boolean;
+}
+
+/**
+ * Pure: expanded groups a switch should fold, excluding the group now in use.
+ *
+ * The active group never appears: Chromium activates a neighbour when a group
+ * folds, so folding the group you just landed in yanks you straight back out of
+ * the tab you opened. An ungrouped landing folds nothing — jumping to a loose tab
+ * should not close the reader's workspace.
+ */
+export function selectGroupsToCollapse(
+  groups: readonly GroupCollapseCandidate[],
+  activeGroupId: number,
+): number[] {
+  if (activeGroupId === GROUP_NONE) return [];
+  return groups
+    .filter((group) => group.collapsed !== true && group.groupId !== activeGroupId && group.groupId !== GROUP_NONE)
+    .map((group) => group.groupId);
+}
+
 export interface IdleGroupCandidate {
   groupId: number;
   collapsed: boolean;
