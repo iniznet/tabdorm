@@ -8,6 +8,7 @@ import { initContextMenus, suspendOtherTabs, toggleWhitelistForTab } from '@/cor
 import { restoreSession, openUrlListPaced } from '@/core/restoration';
 import { initRestoreGuard } from '@/core/restore-guard';
 import { applyFormGuardSync, clearDirtyForm, markDirtyForm } from '@/core/form-guard';
+import { applyImageCacheSync, lookupCachedImages } from '@/core/image-replay';
 import { reportBatteryState } from '@/core/battery';
 import { discardTabSafe, flushPendingDiscard } from '@/core/discard';
 import { closeDuplicateTabs } from '@/core/close-duplicates';
@@ -62,6 +63,7 @@ export default defineBackground(() => {
     if (area !== 'sync' || changes['tabdormConfig'] === undefined) return;
     void resyncAlarms();
     void getConfig().then(applyFormGuardSync);
+    void getConfig().then(applyImageCacheSync);
     scheduleRoutingBackfill(changes['tabdormConfig']);
   });
   void bootstrap(shadowTree);
@@ -88,6 +90,7 @@ async function bootstrap(shadowTree: ShadowTree): Promise<void> {
     await syncSweepAlarm(config);
     await syncSnapshotAlarm(config);
     await ensureColdStartSeeded();
+    await applyImageCacheSync(config);
   } catch (error) {
     console.warn('[tabdorm] config bootstrap failed; defaults active.', error);
   }
@@ -184,6 +187,10 @@ async function handleMessage(
       const tabId = sender.tab?.id;
       if (tabId !== undefined) await clearDirtyForm(tabId);
       return undefined;
+    }
+    case 'imagesLookup': {
+      const config = await getConfig();
+      return { images: await lookupCachedImages(request.pageUrl, request.keys, config) };
     }
   }
 }

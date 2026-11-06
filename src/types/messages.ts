@@ -17,7 +17,8 @@ export type BackgroundRequest =
   | { type: 'reportBattery'; charging: boolean }
   | { type: 'closeDuplicates'; tabIds: number[] }
   | { type: 'dirtyForm' }
-  | { type: 'clearDirtyForm' };
+  | { type: 'clearDirtyForm' }
+  | { type: 'imagesLookup'; pageUrl: string; keys: string[] };
 
 export type BackgroundResponse =
   | { ok: true; payload?: unknown }
@@ -36,6 +37,7 @@ const REQUEST_TYPES: readonly RequestType[] = [
   'closeDuplicates',
   'dirtyForm',
   'clearDirtyForm',
+  'imagesLookup',
 ];
 
 const RESTORE_DESTINATIONS: readonly RestoreDestination[] = ['original', 'single', 'current'];
@@ -58,6 +60,22 @@ export function parseBackgroundRequest(raw: unknown): { ok: true; request: Backg
     case 'dirtyForm':
     case 'clearDirtyForm':
       return { ok: true, request: { type } };
+    case 'imagesLookup': {
+      const pageUrl = candidate['pageUrl'];
+      const keys = candidate['keys'];
+      if (typeof pageUrl !== 'string' || pageUrl === '') {
+        return { ok: false, error: 'imagesLookup requires a pageUrl.' };
+      }
+      if (
+        !Array.isArray(keys) ||
+        keys.length === 0 ||
+        keys.length > 200 ||
+        keys.some((key) => typeof key !== 'string' || key === '')
+      ) {
+        return { ok: false, error: 'imagesLookup requires a non-empty array of URL strings (max 200).' };
+      }
+      return { ok: true, request: { type, pageUrl, keys: keys as string[] } };
+    }
     case 'suspendTab': {
       const tabId = candidate['tabId'];
       if (typeof tabId !== 'number' || !Number.isInteger(tabId)) return { ok: false, error: 'suspendTab requires an integer tabId.' };
