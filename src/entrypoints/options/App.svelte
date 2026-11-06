@@ -10,6 +10,7 @@
   import StaleOptions from '@/lib/ui/options/StaleOptions.svelte';
   import SnapshotsOptions from '@/lib/ui/options/SnapshotsOptions.svelte';
   import ImagesOptions from '@/lib/ui/options/ImagesOptions.svelte';
+  import GalleryOptions from '@/lib/ui/options/GalleryOptions.svelte';
   import DangerZone from '@/lib/ui/options/DangerZone.svelte';
 
   let config: TabDormConfig | null = $state(null);
@@ -26,6 +27,7 @@
     ['restoration', 'Restoration'],
     ['snapshots', 'Snapshots'],
     ['images', 'Images'],
+    ['gallery', 'Gallery'],
     ['data', 'Data & backup'],
   ] as const;
 
@@ -140,6 +142,7 @@
         <RestorationOptions {config} onChange={update} />
         <SnapshotsOptions {config} onChange={update} />
         <ImagesOptions {config} onChange={update} />
+        <GalleryOptions />
         <Section id="data" title="Data & backup" description="Destructive operations. Export first — there is no undo.">
           <DangerZone {config} onImported={onImported} />
         </Section>
