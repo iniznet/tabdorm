@@ -26,6 +26,28 @@ export type GroupOrderMode = 'off' | 'top' | 'bottom';
 /** Whitelist for {@link GroupOrderMode}. An unknown stored value resolves to 'bottom'. */
 export const GROUP_ORDER_MODES: readonly GroupOrderMode[] = ['off', 'top', 'bottom'];
 
+/**
+ * Pinned image cache for suspended tabs: the images a tab was showing, kept
+ * locally so a wake paints them without the network.
+ *
+ * Off by default. Capturing needs the optional `scripting` + `<all_urls>` grant,
+ * and a fresh install holds neither, so defaulting on would surprise the user
+ * with a permission prompt and disk writes.
+ */
+export interface ImageCacheConfig {
+  enabled: boolean;
+  /** How long a captured image may be served; measured from capture time. */
+  ttlMinutes: number;
+  /** Byte budget for the whole store; least recently used entries go first. */
+  maxMegabytes: number;
+  /** One image larger than this is skipped entirely. */
+  maxImageKilobytes: number;
+  /** Images below this pixel area are skipped — tracking pixels, spacers, icons. */
+  minPixels: number;
+  /** Wall-clock ceiling for one tab's capture, so a suspend never waits on it. */
+  captureDeadlineMs: number;
+}
+
 /** Fully-typed configuration. Every timer, threshold, and rule lives here — zero hardcoding. */
 export interface TabDormConfig {
   schemaVersion: number;
@@ -85,6 +107,7 @@ export interface TabDormConfig {
     /** Hours without a visit before a tab is flagged stale; 0 disables flagging. */
     staleAfterHours: number;
   };
+  images: ImageCacheConfig;
   restoration: {
     batchSize: number;
     delayBetweenTabsMs: number;
