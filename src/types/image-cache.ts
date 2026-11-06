@@ -23,6 +23,12 @@ export interface CachedImage {
   lastUsed: number;
   /** The image bytes. */
   blob: Blob;
+  /**
+   * Downscaled copy for the gallery grid, written at capture time. Absent on
+   * records from before previews existed, and on images already small enough to
+   * paint whole, so every reader falls back to `blob`.
+   */
+  preview?: Blob;
 }
 
 /** One host's share of the cache, as the Options readout shows it. */

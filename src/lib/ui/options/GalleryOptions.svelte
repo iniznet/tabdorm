@@ -22,7 +22,10 @@
     pageUrl: string;
     size: number;
     savedAt: number;
-    url: string;
+    /** Small preview the tile paints. */
+    preview: string;
+    /** Original bytes, kept un-decoded until the reader presses the tile. */
+    blob: Blob;
   }
 
   let cards = $state<Card[]>([]);
@@ -30,7 +33,10 @@
   let bytes = $state(0);
   let loading = $state(true);
   let error = $state('');
-  let selected = $state<Card | null>(null);
+  let selectedIndex = $state(-1);
+  let selectedUrl = $state('');
+  /** The opened card, derived from the index so stepping never forks state. */
+  const selected = $derived(selectedIndex >= 0 ? (cards[selectedIndex] ?? null) : null);
   let closeButton = $state<HTMLButtonElement | null>(null);
   let permissionNote = $state('');
 
@@ -43,9 +49,10 @@
   }
 
   function toCard(row: CachedImage): Card {
-    const url = URL.createObjectURL(row.blob);
-    liveUrls.add(url);
-    return { key: row.key, host: row.host, pageUrl: row.pageUrl, size: row.size, savedAt: row.savedAt, url };
+    // Records from before previews, and images already small, paint the original.
+    const preview = URL.createObjectURL(row.preview ?? row.blob);
+    liveUrls.add(preview);
+    return { key: row.key, host: row.host, pageUrl: row.pageUrl, size: row.size, savedAt: row.savedAt, preview, blob: row.blob };
   }
 
   function formatDay(ts: number): string {
@@ -90,7 +97,24 @@
   }
 
   function close(): void {
-    selected = null;
+    if (selectedUrl !== '') URL.revokeObjectURL(selectedUrl);
+    selectedUrl = '';
+    selectedIndex = -1;
+  }
+
+  /** Full-size url is minted here, so nothing decodes until a tile is pressed. */
+  function openAt(index: number): void {
+    const card = cards[index];
+    if (card === undefined) return;
+    if (selectedUrl !== '') URL.revokeObjectURL(selectedUrl);
+    selectedUrl = URL.createObjectURL(card.blob);
+    selectedIndex = index;
+  }
+
+  function step(delta: number): void {
+    const next = selectedIndex + delta;
+    if (next < 0 || next >= cards.length) return;
+    openAt(next);
   }
 
   /**
@@ -115,11 +139,24 @@
 
   // Focus lands on the close button, so Escape and Enter both leave the viewer.
   $effect(() => {
-    if (selected !== null) closeButton?.focus();
+    if (selectedIndex >= 0) closeButton?.focus();
   });
 
   function onKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape' && selected !== null) close();
+    if (selectedIndex < 0) return;
+    if (event.key === 'Escape') {
+      close();
+      return;
+    }
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      step(1);
+      return;
+    }
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      step(-1);
+    }
   }
 </script>
 
@@ -175,20 +212,20 @@
       </div>
     {:else}
       <div class="grid grid-cols-2 gap-2 min-[520px]:grid-cols-3 min-[760px]:grid-cols-4">
-        {#each cards as card (card.key)}
+        {#each cards as card, index (card.key)}
           <button
             type="button"
             class="group overflow-hidden rounded-lg border border-line bg-raised text-left transition-colors duration-120 hover:border-accent/60"
             aria-label="Inspect the cached image from {card.host}"
-            onclick={() => (selected = card)}
+            onclick={() => openAt(index)}
           >
             <span class="block aspect-[4/3] overflow-hidden bg-overlay">
               <img
-                src={card.url}
+                src={card.preview}
                 alt="Cached image from {card.host}"
                 loading="lazy"
                 decoding="async"
-                class="h-full w-full object-cover transition-transform duration-150 group-hover:scale-[1.02]"
+                class="h-full w-full object-contain transition-transform duration-150 group-hover:scale-[1.02]"
               />
             </span>
             <span class="block px-2 py-1.5">
@@ -218,56 +255,70 @@
   </div>
 
   {#if selected !== null}
-    <div class="fixed inset-0 z-50 grid place-items-center bg-surface/85 p-4" role="dialog" aria-modal="true" aria-label="Cached image">
-      <div class="w-full max-w-[640px] overflow-hidden rounded-xl border border-line bg-overlay">
-        <div class="flex items-center gap-2 border-b border-line px-3 py-2">
-          <span class="min-w-0 flex-1 truncate text-[13px] text-ink">{selected.host}</span>
-          <button
-            bind:this={closeButton}
-            type="button"
-            class="rounded-md p-1 text-dim transition-colors duration-120 hover:bg-raised hover:text-ink"
-            aria-label="Close the image viewer"
-            onclick={close}
-          >
-            <Icon name="close" size={14} />
-          </button>
-        </div>
+    <div
+      class="fixed inset-0 z-50 flex flex-col bg-surface/95 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Cached image viewer"
+    >
+      <header class="flex items-center gap-2 border-b border-line px-3 py-2">
+        <span class="shrink-0 rounded-md bg-raised px-1.5 py-0.5 font-mono text-[11px] text-dim">
+          {selectedIndex + 1} / {cards.length}
+        </span>
+        <span class="min-w-0 flex-1 truncate text-[13px] text-ink" title={selected.pageUrl}>{selected.host}</span>
+        <span class="hidden shrink-0 text-[11px] text-faint min-[520px]:inline">← → to walk · Esc to close</span>
+        <button
+          bind:this={closeButton}
+          type="button"
+          class="shrink-0 rounded-md p-1 text-dim transition-colors duration-120 hover:bg-raised hover:text-ink"
+          aria-label="Close the image viewer"
+          onclick={close}
+        >
+          <Icon name="close" size={14} />
+        </button>
+      </header>
 
-        <div class="bg-surface p-3">
-          <img
-            src={selected.url}
-            alt="Cached image from {selected.host}"
-            class="mx-auto block max-h-[60vh] w-auto max-w-full rounded-md object-contain"
-          />
-        </div>
+      <div class="relative flex min-h-0 flex-1 items-center justify-center p-2">
+        <button
+          type="button"
+          class="absolute left-2 z-10 grid h-9 w-9 place-items-center rounded-full border border-line bg-raised/90 text-ink transition-colors duration-120 hover:bg-overlay disabled:opacity-30"
+          aria-label="Previous image"
+          disabled={selectedIndex === 0}
+          onclick={() => step(-1)}
+        >
+          <Icon name="chevron" size={16} class="rotate-180" />
+        </button>
 
-        <dl class="divide-y divide-line/60 px-3 pb-1 text-[12px]">
-          <div class="flex items-baseline gap-3 py-1.5">
-            <dt class="w-24 shrink-0 text-faint">Size</dt>
-            <dd class="min-w-0 flex-1 text-dim">{formatByteSize(selected.size)}</dd>
-          </div>
-          <div class="flex items-baseline gap-3 py-1.5">
-            <dt class="w-24 shrink-0 text-faint">Saved</dt>
-            <dd class="min-w-0 flex-1 text-dim">{formatSaved(selected.savedAt)}</dd>
-          </div>
-          <div class="flex items-baseline gap-3 py-1.5">
-            <dt class="w-24 shrink-0 text-faint">From page</dt>
-            <dd class="min-w-0 flex-1">
-              <a
-                href={selected.pageUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-                class="text-accent underline-offset-2 hover:underline"
-                title={selected.pageUrl}>{selected.host}</a
-              >
-            </dd>
-          </div>
-          <div class="flex items-baseline gap-3 py-1.5">
-            <dt class="w-24 shrink-0 text-faint">Image URL</dt>
-            <dd class="min-w-0 flex-1 break-all font-mono text-[11px] text-dim">{selected.key}</dd>
-          </div>
-        </dl>
+        <img
+          src={selectedUrl}
+          alt="Cached image from {selected.host}"
+          decoding="async"
+          class="max-h-full max-w-full rounded-md object-contain"
+        />
+
+        <button
+          type="button"
+          class="absolute right-2 z-10 grid h-9 w-9 place-items-center rounded-full border border-line bg-raised/90 text-ink transition-colors duration-120 hover:bg-overlay disabled:opacity-30"
+          aria-label="Next image"
+          disabled={selectedIndex === cards.length - 1}
+          onclick={() => step(1)}
+        >
+          <Icon name="chevron" size={16} />
+        </button>
       </div>
+
+      <footer class="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line px-3 py-2 text-[12px] text-dim">
+        <span class="shrink-0">{formatByteSize(selected.size)}</span>
+        <span class="shrink-0">Saved {formatSaved(selected.savedAt)}</span>
+        <a
+          href={selected.pageUrl}
+          target="_blank"
+          rel="noreferrer noopener"
+          class="shrink-0 text-accent underline-offset-2 hover:underline"
+          title={selected.pageUrl}>{selected.host}</a
+        >
+        <span class="min-w-0 flex-1 truncate font-mono text-[11px] text-faint" title={selected.key}>{selected.key}</span>
+      </footer>
     </div>
   {/if}
 </section>
