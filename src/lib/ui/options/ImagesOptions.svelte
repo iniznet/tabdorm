@@ -96,6 +96,12 @@
       hint="Off by default. Turning it on asks for the optional broad site permission, because the images have to be read from the page before it sleeps."
       onChange={(value) => void toggleEnabled(value)}
     />
+    <Toggle
+      checked={config.images.autoCapture}
+      label="Keep images while the tab is open"
+      hint="Reads each picture as the page loads it, so a suspend has nothing left to fetch. These copies live only until the tab closes; a sleeping tab keeps them under the storage budget below."
+      onChange={(value) => onChange((draft) => (draft.images.autoCapture = value))}
+    />
     <NumberField
       value={config.images.ttlMinutes}
       label="Keep each image for"
@@ -115,6 +121,24 @@
       onChange={(value) => onChange((draft) => (draft.images.maxMegabytes = value))}
     />
     <NumberField
+      value={config.images.sessionMaxMegabytes}
+      label="Awake storage budget"
+      hint="Bytes held for tabs that are still open. 0 = no cap. Closing a tab frees its share at once."
+      min={0}
+      max={8192}
+      suffix="MB"
+      onChange={(value) => onChange((draft) => (draft.images.sessionMaxMegabytes = value))}
+    />
+    <NumberField
+      value={config.images.sessionMaxImages}
+      label="Pictures kept per open tab"
+      hint="Least recently seen go first. 0 = no cap."
+      min={0}
+      max={5000}
+      suffix="images"
+      onChange={(value) => onChange((draft) => (draft.images.sessionMaxImages = value))}
+    />
+    <NumberField
       value={config.images.maxImageKilobytes}
       label="Skip images larger than"
       hint="A full-size picture runs 1 to 10 MB. 0 = no cap, so every picture is kept and the storage budget decides instead."
@@ -122,6 +146,15 @@
       max={8192}
       suffix="KB"
       onChange={(value) => onChange((draft) => (draft.images.maxImageKilobytes = value))}
+    />
+    <NumberField
+      value={config.images.minBytes}
+      label="Skip responses smaller than"
+      hint="Used when the page reports no rendered size, for a picture loaded by script. 8192 = 8 KB."
+      min={0}
+      max={1048576}
+      suffix="B"
+      onChange={(value) => onChange((draft) => (draft.images.minBytes = value))}
     />
     <NumberField
       value={config.images.minPixels}
