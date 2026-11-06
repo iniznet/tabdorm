@@ -38,7 +38,7 @@ export interface ImageCacheConfig {
   enabled: boolean;
   /** How long a captured image may be served; measured from capture time. */
   ttlMinutes: number;
-  /** Byte budget for the whole store; least recently used entries go first. */
+  /** Byte budget for the whole store; least recently used entries go first. `0` means no cap. */
   maxMegabytes: number;
   /** One image larger than this is skipped entirely. */
   maxImageKilobytes: number;

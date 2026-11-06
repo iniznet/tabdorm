@@ -69,6 +69,17 @@ test('the byte ceiling refuses empty bodies and oversized images', () => {
   assert.equal(exceedsByteCeiling(900 * 1024, config({ maxImageKilobytes: 1_024 })), false);
 });
 
+test('a zero budget disables eviction instead of dropping everything', () => {
+  const rows = [
+    { key: 'a', size: 900, savedAt: 1, lastUsed: 1 },
+    { key: 'b', size: 900, savedAt: 1, lastUsed: 2 },
+  ];
+  assert.deepEqual(selectOverBudget(rows, 0), []);
+  assert.deepEqual(selectOverBudget(rows, -1), []);
+  assert.deepEqual(selectOverBudget(rows, 1_800), []);
+  assert.deepEqual(selectOverBudget(rows, 1_799), ['a']);
+});
+
 test('formatByteSize stays readable across the three magnitudes', () => {
   assert.equal(formatByteSize(0), '0 B');
   assert.equal(formatByteSize(-5), '0 B');
@@ -110,7 +121,7 @@ test('selectOverBudget drops the least recently used first until the budget fits
   ];
   assert.deepEqual(selectOverBudget(records, 100), ['oldest']);
   assert.deepEqual(selectOverBudget(records, 60), ['oldest', 'middle']);
-  assert.deepEqual(selectOverBudget(records, 0), ['oldest', 'middle', 'newest']);
+  assert.deepEqual(selectOverBudget(records, 1), ['oldest', 'middle', 'newest']);
 });
 
 test('selectOverBudget breaks a lastUsed tie by key so the order is total', () => {

@@ -101,6 +101,9 @@ export function selectOverBudget(
   records: readonly TimedImageRecord[],
   budgetBytes: number,
 ): string[] {
+  // Zero or below means "no byte cap": the TTL is the only bound, so eviction
+  // never runs and nothing is dropped for being large.
+  if (budgetBytes <= 0) return [];
   let total = 0;
   for (const record of records) total += record.size;
   if (total <= budgetBytes) return [];

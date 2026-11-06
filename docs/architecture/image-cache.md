@@ -43,7 +43,8 @@ graph LR
 | Capture runs only inside `discardTabSafe()` | That function is the single discard funnel, and a second hook would drift from it |
 | Capture is bounded by `captureDeadlineMs` | A heavy page must never delay a suspend |
 | TTL and budget are enforced on read as well as on sweep | A stalled sweep must not serve expired bytes |
-| Every knob is clamped in `resolveConfig` | A stored or imported value can never exceed the ceiling, so a typo cannot fill the disk: budget stops at 8 GB |
+| Every knob is clamped in `resolveConfig` | A stored or imported value can never exceed the ceiling, so a typo cannot fill the disk: the budget stops at 8 GB, and `0` means no cap at all |
+| `0` on the budget means TTL-only | `selectOverBudget` returns nothing, so eviction never runs and only expiry removes rows |
 | Images never touch `chrome.storage` | That tier caps at 10 MB without `unlimitedStorage` and serializes to JSON |
 | A blocked swap restores the original URL | A strict `img-src` CSP must degrade to a normal network load, never a broken image |
 
