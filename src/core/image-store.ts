@@ -98,3 +98,13 @@ export async function clearAllImages(): Promise<ImageClearResult> {
   if (count > 0) await db.images.clear();
   return { removed: count, bytes };
 }
+
+/**
+ * One page of the Options gallery, newest first. Metadata and bytes arrive
+ * together because the grid paints the record it just read, and the `savedAt`
+ * index carries the slice so the read never walks the whole store.
+ */
+export async function imageGalleryPage(offset: number, limit: number): Promise<CachedImage[]> {
+  if (limit <= 0) return [];
+  return db.images.orderBy('savedAt').reverse().offset(offset).limit(limit).toArray();
+}

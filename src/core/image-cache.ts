@@ -75,6 +75,22 @@ export function formatByteSize(bytes: number): string {
   return `${(bytes / (1_024 * 1_024)).toFixed(1)} MB`;
 }
 
+/**
+ * Pure: the next slice a "load more" grid fetches, given how many rows it already
+ * holds. The limit is clamped to what is left, so a store that shrank since the
+ * first read never hands back a key the grid already shows. A duplicate key in a
+ * keyed list is a render error, not a redundant tile.
+ */
+export function nextGalleryWindow(
+  total: number,
+  shown: number,
+  pageSize: number,
+): { offset: number; limit: number } {
+  if (pageSize <= 0 || total <= 0) return { offset: 0, limit: 0 };
+  const offset = Math.max(0, Math.min(shown, total));
+  return { offset, limit: Math.max(0, Math.min(pageSize, total - offset)) };
+}
+
 /** The configured TTL in milliseconds. */
 export function ttlMsOf(config: ImageCacheConfig): number {
   return config.ttlMinutes * 60_000;
