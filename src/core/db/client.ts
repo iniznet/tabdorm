@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { TabCollection, UnifiedSession } from '@/types';
+import type { CachedImage, TabCollection, UnifiedSession } from '@/types';
 
 /** UnifiedSession as persisted — Dexie adds the auto-increment `rev` cursor key. */
 export interface StoredSession extends UnifiedSession {
@@ -9,6 +9,7 @@ export interface StoredSession extends UnifiedSession {
 export class TabDormDatabase extends Dexie {
   sessions!: Table<StoredSession, number, UnifiedSession>;
   collections!: Table<TabCollection, number, TabCollection>;
+  images!: Table<CachedImage, string, CachedImage>;
 
   constructor() {
     super('tabdorm');
@@ -21,6 +22,14 @@ export class TabDormDatabase extends Dexie {
     this.version(2).stores({
       sessions: '++rev, &id, timestamp, [type+timestamp], contentHash',
       collections: '++rev, &id, updatedAt',
+    });
+    // Pinned image cache for suspended tabs. Keys are absolute image URLs, never
+    // tab ids: a record outlives a restart and tab ids are reused. `host` carries
+    // the scoped clear; `savedAt` the TTL, `lastUsed` the LRU budget.
+    this.version(3).stores({
+      sessions: '++rev, &id, timestamp, [type+timestamp], contentHash',
+      collections: '++rev, &id, updatedAt',
+      images: '&key, savedAt, lastUsed, host',
     });
   }
 }

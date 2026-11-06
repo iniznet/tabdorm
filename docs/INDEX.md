@@ -4,4 +4,5 @@
 - [Group engine](architecture/group-engine.md) — domain auto-routing rules, the collapse engine (switch, idle, suspend-on-collapse), group ordering on activate, and focus restore when the active tab closes.
 - [Sessions & restoration](architecture/sessions-and-restoration.md) — shadow tree, snapshot lifecycle, paced restoration, TMS migration.
 - [Stale tabs](architecture/stale-tabs.md) — per-tab visit records, age ordering, and the guarded bulk close.
+- [Image cache](architecture/image-cache.md) — pinned images for suspended tabs, TTL and LRU budget, why request interception is impossible in MV3.
 - [Storage & config](architecture/storage-and-config.md) — the three storage tiers, config resolution/clamping, quota handling, Dexie pagination.
