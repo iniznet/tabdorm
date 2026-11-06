@@ -27,12 +27,16 @@ export type BackgroundRequest =
 
 /** One picture a page announced as it loaded. */
 export interface AnnouncedImage {
-  /** Absolute http(s) URL, already normalized by the page script. */
+  /** Absolute http(s) URL, already normalized by the page script, or the raw
+   *  `blob:`/`data:` source when `kind` is `inline`. */
   src: string;
   /** Rendered area; 0 when only resource timing reported it. */
   pixels: number;
-  /** `fetch` means no rendered box exists, so a byte floor decides instead. */
-  kind: 'img' | 'fetch';
+  /** `fetch` means no rendered box exists, so a byte floor decides instead.
+   *  `inline` means the page already holds the bytes and sends them in `dataUrl`. */
+  kind: 'img' | 'fetch' | 'inline';
+  /** Bytes the page holds, for an inline picture. Only the page can read them. */
+  dataUrl?: string;
 }
 
 export type BackgroundResponse =

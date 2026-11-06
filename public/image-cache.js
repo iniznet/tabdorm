@@ -16,6 +16,16 @@
   let announceQueue = [];
   let announceTimer;
 
+  // A picture the page holds itself: a `blob:` url resolves only in the context
+  // that created it and a `data:` url is the bytes, so the worker can read
+  // neither. The page reads them once and sends the payload, bounded per page so
+  // one viewer cannot flood the port.
+  const MAX_INLINE = 30;
+  const MAX_INLINE_ITEM_BYTES = 24 * 1024 * 1024;
+  const MAX_INLINE_TOTAL_BYTES = 48 * 1024 * 1024;
+  let inlineCount = 0;
+  let inlineBytes = 0;
+
   const pending = new Set();
   const requested = new Set();
   let scheduled = false;
@@ -47,10 +57,66 @@
   const announce = (raw, pixels, kind) => {
     const key = normalize(raw);
     if (key === null || announced.has(key)) return;
+    // A picture with no rendered box yet is not decided here: the load event
+    // announces it again with its real area, and an invisible one stays out.
+    if (kind === 'img' && pixels <= 0) return;
     if (announced.size >= MAX_ANNOUNCE) return;
     announced.add(key);
     announceQueue.push({ src: key, pixels, kind });
     if (announceTimer === undefined) announceTimer = setTimeout(flushAnnounce, ANNOUNCE_MS);
+  };
+
+  const INLINE_PREFIXES = ['blob:', 'data:image/'];
+  const isInline = (raw) =>
+    typeof raw === 'string' && INLINE_PREFIXES.some((prefix) => raw.startsWith(prefix));
+
+  /** A Set key without holding a second copy of a data url's megabytes. */
+  const inlineKeyOf = (raw) =>
+    raw.startsWith('data:') ? 'data:' + raw.length + ':' + raw.slice(0, 48) + raw.slice(-24) : raw;
+
+  /** The bytes of an inline picture as a data url, or null. */
+  const readInline = async (raw) => {
+    try {
+      if (raw.startsWith('data:')) return raw;
+      const response = await fetch(raw);
+      if (!response.ok) return null;
+      const blob = await response.blob();
+      if (blob.size === 0 || blob.size > MAX_INLINE_ITEM_BYTES) return null;
+      if (!blob.type.startsWith('image/')) return null;
+      return await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.addEventListener('load', () => resolve(typeof reader.result === 'string' ? reader.result : null), { once: true });
+        reader.addEventListener('error', () => resolve(null), { once: true });
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return null;
+    }
+  };
+
+  /**
+   * Queues one inline picture. Only this context can read it, so the read happens
+   * here, and a payload this size goes out on its own instead of behind a batch
+   * of ordinary urls.
+   */
+  const announceInline = async (raw, pixels) => {
+    if (!isInline(raw)) return;
+    const seen = inlineKeyOf(raw);
+    if (announced.has(seen)) return;
+    if (inlineCount >= MAX_INLINE || inlineBytes >= MAX_INLINE_TOTAL_BYTES) return;
+    announced.add(seen);
+    inlineCount += 1;
+    const dataUrl = await readInline(raw);
+    if (dataUrl === null || !dataUrl.startsWith('data:image/')) return;
+    const bytes = Math.floor((dataUrl.length * 3) / 4);
+    if (bytes > MAX_INLINE_ITEM_BYTES || inlineBytes + bytes > MAX_INLINE_TOTAL_BYTES) return;
+    inlineBytes += bytes;
+    announceQueue.push({ src: raw, pixels, kind: 'inline', dataUrl });
+    if (announceTimer !== undefined) {
+      clearTimeout(announceTimer);
+      announceTimer = undefined;
+    }
+    void flushAnnounce();
   };
 
   const flushAnnounce = async () => {
@@ -72,7 +138,9 @@
     for (const image of document.images) {
       const raw = image.currentSrc || image.getAttribute('src') || '';
       const natural = image.naturalWidth * image.naturalHeight;
-      announce(raw, natural > 0 ? natural : boxPixels(image), 'img');
+      const pixels = natural > 0 ? natural : boxPixels(image);
+      announce(raw, pixels, 'img');
+      void announceInline(raw, pixels);
       if (image.dataset.tabdormCached === '1') continue;
       const key = normalize(raw);
       if (key !== null && !requested.has(key)) pending.add(key);
@@ -86,6 +154,7 @@
       const match = pattern.exec(computed);
       if (match === null) continue;
       announce(match[1], boxPixels(element), 'img');
+      void announceInline(match[1], boxPixels(element));
       const key = normalize(match[1]);
       if (key !== null && !requested.has(key)) pending.add(key);
     }
@@ -195,6 +264,18 @@
   } else {
     schedule();
   }
+  // A picture can be announced before it has a box, so its real area arrives
+  // with the load event. Load does not bubble, but a capture listener sees it.
+  document.addEventListener(
+    'load',
+    (event) => {
+      const image = event.target;
+      if (!(image instanceof HTMLImageElement)) return;
+      const raw = image.currentSrc || image.getAttribute('src') || '';
+      void announceInline(raw, image.naturalWidth * image.naturalHeight);
+    },
+    true,
+  );
   observeTransfers();
   new MutationObserver(schedule).observe(document.documentElement, {
     childList: true,

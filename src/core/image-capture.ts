@@ -69,7 +69,9 @@ function collectCandidates(limit: number, blobLimit: number): ImageCandidate[] {
   const push = (raw: string | null | undefined, pixels: number): void => {
     if (typeof raw !== 'string' || raw.length === 0) return;
     if (seen.has(raw)) return;
-    const kind = raw.startsWith('blob:') ? 'blob' : 'url';
+    // A `data:` picture carries its own bytes, so it is read in the page exactly
+    // like a blob and never fetched by the worker.
+    const kind = raw.startsWith('blob:') || raw.startsWith('data:image/') ? 'blob' : 'url';
     if (kind === 'blob') {
       if (blobs >= blobLimit) return;
       blobs += 1;
@@ -133,7 +135,7 @@ async function readBlobDataUrl(url: string, maxKilobytes: number): Promise<strin
 }
 
 /** Short stable digest, so a re-capture of one picture overwrites its own row. */
-async function digestOf(blob: Blob): Promise<string> {
+export async function digestOf(blob: Blob): Promise<string> {
   const hash = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
   return Array.from(new Uint8Array(hash).slice(0, 8), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }

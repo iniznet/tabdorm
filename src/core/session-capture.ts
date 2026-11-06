@@ -1,11 +1,15 @@
 import { getConfig } from './config-store';
-import { hostOfUrl, isCacheableImageUrl, normalizeImageKey } from './image-cache';
-import { makePreview } from './image-capture';
+import { blobImageKey, hostOfUrl, isCacheableImageUrl, normalizeImageKey } from './image-cache';
+import { digestOf, makePreview } from './image-capture';
 import {
   contentLengthRefused,
+  declaredBytesOfDataUrl,
+  inlineSessionKey,
+  isInlineImageSource,
   refuseReason,
   sessionKey,
   shouldCaptureSize,
+  shouldReadInline,
   shouldWriteSessionRow,
   sniffImageMime,
 } from './image-session';
@@ -39,6 +43,9 @@ const READ_TIMEOUT_MS = 8_000;
 /** Magic-byte prefix needed by `sniffImageMime`. */
 const SNIFF_BYTES = 16;
 
+/** Inline pictures stored per announcement. One page can hold hundreds. */
+const MAX_INLINE_PER_BATCH = 12;
+
 interface CaptureTarget {
   key: string;
   kind: AnnouncedImage['kind'];
@@ -64,6 +71,104 @@ function pickTargets(
     targets.push({ key, kind: item.kind });
   }
   return targets;
+}
+
+/**
+ * Payloads worth storing from one announcement: the page read those bytes
+ * itself, so this list is what the worker could never have fetched.
+ */
+function pickInline(items: readonly AnnouncedImage[], config: ImageCacheConfig): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of items) {
+    if (item.kind !== 'inline') continue;
+    const payload = item.dataUrl;
+    if (typeof payload !== 'string' || !payload.startsWith('data:image/')) continue;
+    if (!isInlineImageSource(item.src)) continue;
+    // The box was rendered, so the pixel floor is a real decision here.
+    if (!shouldReadInline(item.pixels, config)) continue;
+    if (seen.has(payload)) continue;
+    seen.add(payload);
+    out.push(payload);
+  }
+  return out;
+}
+
+/**
+ * One picture the page already holds. Keyed by its own digest, so a viewer that
+ * mints a fresh `blob:` uuid on every render overwrites that row instead of
+ * piling up copies. Replay matches page urls, so this row feeds the gallery.
+ */
+async function readInlineOne(
+  dataUrl: string,
+  host: string,
+  pageUrl: string,
+  tabId: number,
+  config: ImageCacheConfig,
+): Promise<CachedSessionImage | null> {
+  try {
+    const declared = declaredBytesOfDataUrl(dataUrl);
+    if (declared <= 0) return null;
+    if (contentLengthRefused(declared, config, HARD_READ_BYTES)) return null;
+    const blob = await (await fetch(dataUrl)).blob();
+    if (blob.size > HARD_READ_BYTES) return null;
+    if (!shouldCaptureSize(blob.size, config)) return null;
+    const header = new Uint8Array(await blob.slice(0, SNIFF_BYTES).arrayBuffer());
+    const mime = sniffImageMime(blob.type, header);
+    if (mime === null) return null;
+    try {
+      await chrome.tabs.get(tabId);
+    } catch {
+      return null;
+    }
+    const digest = await digestOf(blob);
+    const imageKey = blobImageKey(digest);
+    const offline = new Set((await readImages([imageKey])).map((row) => row.key));
+    if (!shouldWriteSessionRow(offline.has(imageKey))) {
+      await touchImages([imageKey], Date.now());
+      return null;
+    }
+    const now = Date.now();
+    const preview = blob.size >= PREVIEW_FROM_BYTES ? await makePreview(blob) : null;
+    const row: CachedSessionImage = {
+      key: inlineSessionKey(tabId, digest),
+      tabId,
+      imageKey,
+      host,
+      pageUrl,
+      mime,
+      size: blob.size,
+      savedAt: now,
+      lastUsed: now,
+      blob,
+    };
+    if (preview !== null) row.preview = preview;
+    return row;
+  } catch {
+    return null;
+  }
+}
+
+/** Stores the inline pictures one announcement carried. Returns rows written. */
+async function captureInline(
+  payloads: readonly string[],
+  host: string,
+  pageUrl: string,
+  tabId: number,
+  config: ImageCacheConfig,
+): Promise<number> {
+  let saved = 0;
+  for (const payload of payloads.slice(0, MAX_INLINE_PER_BATCH)) {
+    const row = await readInlineOne(payload, host, pageUrl, tabId, config);
+    if (row === null) continue;
+    try {
+      await putSessionImage(row);
+      saved += 1;
+    } catch (error) {
+      console.warn('[tabdorm] session image write failed.', error);
+    }
+  }
+  return saved;
 }
 
 /** Reads one picture, or null when it is not worth a session row. */
@@ -142,34 +247,40 @@ export async function captureAnnouncedImages(
   }
   const context = { incognito: tab.incognito === true, discarded: tab.discarded === true };
   const targets = pickTargets(items, pageUrl, context, config.images);
-  if (targets.length === 0) return 0;
+  const inline = pickInline(items, config.images);
+  if (targets.length === 0 && inline.length === 0) return 0;
 
-  // A picture already kept offline is warm, not new: touch it and skip the read,
-  // so an awake page that reloads its own gallery never doubles the bytes.
-  const held = new Set((await readImages(targets.map((target) => target.key))).map((row) => row.key));
-  const touched = targets.filter((target) => !shouldWriteSessionRow(held.has(target.key)));
-  if (touched.length > 0) await touchImages(touched.map((target) => target.key), Date.now());
-  const fresh = targets.filter((target) => shouldWriteSessionRow(held.has(target.key)));
-  if (fresh.length === 0) return 0;
+  // The page already read these bytes, so they cost the worker no request: store
+  // them first, then spend the remaining work on the urls it has to fetch.
+  let saved = await captureInline(inline, host, pageUrl, tabId, config.images);
 
-  let saved = 0;
-  let cursor = 0;
-  const runner = async (): Promise<void> => {
-    for (;;) {
-      const target = fresh[cursor];
-      cursor += 1;
-      if (target === undefined) return;
-      const row = await readOne(target.key, host, pageUrl, tabId, config.images);
-      if (row === null) continue;
-      try {
-        await putSessionImage(row);
-        saved += 1;
-      } catch (error) {
-        console.warn('[tabdorm] session image write failed.', error);
-      }
+  if (targets.length > 0) {
+    // A picture already kept offline is warm, not new: touch it and skip the read,
+    // so an awake page that reloads its own gallery never doubles the bytes.
+    const held = new Set((await readImages(targets.map((target) => target.key))).map((row) => row.key));
+    const touched = targets.filter((target) => !shouldWriteSessionRow(held.has(target.key)));
+    if (touched.length > 0) await touchImages(touched.map((target) => target.key), Date.now());
+    const fresh = targets.filter((target) => shouldWriteSessionRow(held.has(target.key)));
+    if (fresh.length > 0) {
+      let cursor = 0;
+      const runner = async (): Promise<void> => {
+        for (;;) {
+          const target = fresh[cursor];
+          cursor += 1;
+          if (target === undefined) return;
+          const row = await readOne(target.key, host, pageUrl, tabId, config.images);
+          if (row === null) continue;
+          try {
+            await putSessionImage(row);
+            saved += 1;
+          } catch (error) {
+            console.warn('[tabdorm] session image write failed.', error);
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(MAX_PARALLEL, fresh.length) }, runner));
     }
-  };
-  await Promise.all(Array.from({ length: Math.min(MAX_PARALLEL, fresh.length) }, runner));
+  }
 
   try {
     await sweepSessionImages(config.images);

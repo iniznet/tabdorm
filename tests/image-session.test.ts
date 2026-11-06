@@ -2,16 +2,21 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   contentLengthRefused,
+  declaredBytesOfDataUrl,
+  inlineSessionKey,
+  isInlineImageSource,
   promoteSessionRow,
   purgeRowsForTab,
   refuseReason,
   selectSessionOverBudget,
   sessionKey,
   shouldCaptureSize,
+  shouldReadInline,
   shouldWriteSessionRow,
   sniffImageMime,
   tabOfSessionKey,
 } from '../src/core/image-session.ts';
+import { blobImageKey } from '../src/core/image-cache.ts';
 import type { ImageCacheConfig } from '../src/types/config.ts';
 import type { CachedSessionImage } from '../src/types/image-cache.ts';
 
@@ -30,6 +35,44 @@ const config = (overrides: Partial<ImageCacheConfig> = {}): ImageCacheConfig => 
 });
 
 const row = (key: string, tabId: number, size: number, lastUsed: number) => ({ key, tabId, size, lastUsed });
+
+test('only a picture the page holds itself is inline', () => {
+  assert.equal(isInlineImageSource('blob:https://a.example/6b1e'), true);
+  assert.equal(isInlineImageSource('data:image/png;base64,iVBORw0KGgo='), true);
+  // A data url that is not an image is not a picture, and neither is a page url.
+  assert.equal(isInlineImageSource('data:text/html,<b>x</b>'), false);
+  assert.equal(isInlineImageSource('https://a.example/x.png'), false);
+  assert.equal(isInlineImageSource(''), false);
+});
+
+test('a payload length is read as base64, never trusted as a byte count', () => {
+  // 4 base64 characters stand for 3 bytes, and the header costs nothing.
+  assert.equal(declaredBytesOfDataUrl('data:image/png;base64,' + 'A'.repeat(4)), 3);
+  assert.equal(declaredBytesOfDataUrl('data:image/png;base64,' + 'A'.repeat(8_192)), 6_144);
+  // Anything unreadable reports 0, which never refuses on its own.
+  assert.equal(declaredBytesOfDataUrl('data:image/png;base64'), 0);
+  assert.equal(declaredBytesOfDataUrl('data:image/png;base64,'), 0);
+  assert.equal(declaredBytesOfDataUrl('data:text/plain,hello'), 0);
+  assert.equal(declaredBytesOfDataUrl('https://a.example/x.png'), 0);
+});
+
+test('an inline picture needs a rendered box above the pixel floor', () => {
+  const cfg = config();
+  assert.equal(shouldReadInline(4_095, cfg), false);
+  assert.equal(shouldReadInline(4_096, cfg), true);
+  // An unmeasured box is not a rejection: the byte floor decides after the read.
+  assert.equal(shouldReadInline(0, cfg), true);
+  // The floor is the knob, so a page with no floor keeps everything rendered.
+  assert.equal(shouldReadInline(1, config({ minPixels: 0 })), true);
+});
+
+test('an inline row is keyed by its digest, so one picture is one row', () => {
+  // One literal for both bands: the offline key and the session key agree.
+  assert.equal(inlineSessionKey(7, 'deadbeef'), '7:' + blobImageKey('deadbeef'));
+  assert.equal(inlineSessionKey(7, 'deadbeef'), '7:blob-sha256:deadbeef');
+  // The same picture announced again lands on the same key, whatever its uuid.
+  assert.equal(inlineSessionKey(7, 'deadbeef'), inlineSessionKey(7, 'deadbeef'));
+});
 
 test('a session key carries its tab, so one tab deletes in one range', () => {
   assert.equal(sessionKey(7, 'https://a.example/x.png'), '7:https://a.example/x.png');
