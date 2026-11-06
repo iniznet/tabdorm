@@ -138,13 +138,13 @@ export function fitWithin(
 }
 
 /**
- * Key for a frame exported from a canvas. Deliberately not a URL, and never
- * normalized: a viewer that paints into a canvas leaves no image URL behind, so
- * the replay script can never match this record. It exists for the gallery and
- * the tab-list thumbnail, nothing else.
+ * Key for bytes harvested from a page-created `blob:` url, which a worker can
+ * never fetch. Deliberately not a url, and never normalized: the replay script
+ * matches page urls, so this record feeds the gallery and the thumbnail only.
+ * The digest makes a re-capture of the same picture overwrite itself, not pile up.
  */
-export function canvasImageKey(pageUrl: string, index: number): string {
-  return `${pageUrl}#canvas-${index}`;
+export function blobImageKey(digest: string): string {
+  return `blob-sha256:${digest}`;
 }
 
 /** Human byte size for readouts: `0 B`, `940 B`, `12.4 KB`, `1.8 MB`. */
