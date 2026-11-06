@@ -9,6 +9,7 @@ import {
   nextGalleryWindow,
   selectCaptureCandidates,
   normalizeImageKey,
+  pickPageThumbs,
   selectExpired,
   selectOverBudget,
   ttlMsOf,
@@ -178,6 +179,25 @@ test('capture drops unmeasured candidates and honours a zero limit', () => {
   assert.deepEqual(selectCaptureCandidates(page, 10).map((candidate) => candidate.src), ['real']);
   assert.deepEqual(selectCaptureCandidates(page, 0), []);
   assert.deepEqual(selectCaptureCandidates([], 10), []);
+});
+
+test('tab-list thumbs take the newest row per page', () => {
+  const rows = [
+    { key: 'b-old', pageUrl: 'https://b.test/post', savedAt: 10 },
+    { key: 'a-new', pageUrl: 'https://a.test/post', savedAt: 30 },
+    { key: 'a-old', pageUrl: 'https://a.test/post', savedAt: 5 },
+    { key: 'other', pageUrl: 'https://c.test/post', savedAt: 99 },
+  ];
+  const picked = pickPageThumbs(rows, ['https://a.test/post', 'https://b.test/post']);
+  assert.equal(picked.get('https://a.test/post'), 'a-new');
+  assert.equal(picked.get('https://b.test/post'), 'b-old');
+  assert.equal(picked.has('https://c.test/post'), false);
+});
+
+test('tab-list thumbs stay empty when nothing matches', () => {
+  assert.equal(pickPageThumbs([], ['https://a.test/']).size, 0);
+  assert.equal(pickPageThumbs([{ key: 'k', pageUrl: 'https://a.test/', savedAt: 1 }], []).size, 0);
+  assert.equal(pickPageThumbs([{ key: 'k', pageUrl: 'https://a.test/', savedAt: 1 }], ['https://z.test/']).size, 0);
 });
 
 test('preview box keeps the aspect ratio inside the edge', () => {

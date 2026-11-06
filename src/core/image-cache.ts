@@ -93,6 +93,31 @@ export function selectCaptureCandidates<T extends SizedCandidate>(
     .map((entry) => entry.candidate);
 }
 
+/** The fields the tab-list thumb picker needs from a cached row. */
+export interface PageImageRow {
+  key: string;
+  pageUrl: string;
+  savedAt: number;
+}
+
+/**
+ * One image per page, newest first, for the sidepanel tab list. A page with no
+ * cached row is absent from the map, so its row renders without a thumbnail.
+ */
+export function pickPageThumbs(
+  rows: readonly PageImageRow[],
+  wanted: readonly string[],
+): Map<string, string> {
+  const pages = new Set(wanted);
+  const picked = new Map<string, PageImageRow>();
+  for (const row of rows) {
+    if (!pages.has(row.pageUrl)) continue;
+    const current = picked.get(row.pageUrl);
+    if (current === undefined || row.savedAt > current.savedAt) picked.set(row.pageUrl, row);
+  }
+  return new Map([...picked].map(([page, row]) => [page, row.key]));
+}
+
 /**
  * Scaled box that keeps an aspect ratio inside `maxEdge`. Never upscales: a
  * small image is returned at its own size, so a tile is not stretched into

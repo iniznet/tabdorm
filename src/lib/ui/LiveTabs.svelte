@@ -8,6 +8,7 @@
   import { classifyTabState, SLEEP_CLOCK_TICK_MS, type TabState, type TabStateKind } from '@/core/tab-state';
   import { hostnamePattern } from '@/core/whitelist';
   import { getConfig, saveConfig } from '@/core/config-store';
+  import { imageThumbsForPages } from '@/core/image-store';
   import Icon from '@/lib/ui/Icon.svelte';
 
   interface LiveRow {
@@ -124,6 +125,43 @@
   const virtualItems = $derived($virtualizer.getVirtualItems());
   const total = $derived($virtualizer.getTotalSize());
 
+  /** Cached thumbnails for sleeping rows, keyed by page url. */
+  let thumbs = $state<Map<string, string>>(new Map());
+  let thumbSig = '';
+  let thumbToken = 0;
+
+  const asleepUrls = $derived(rows.filter((row) => row.discarded).map((row) => row.url));
+
+  function revokeThumbs(): void {
+    for (const url of thumbs.values()) URL.revokeObjectURL(url);
+    thumbs = new Map();
+  }
+
+  /**
+   * One thumbnail per under-the-hood page read. Reloads only when the sleeping
+   * set changes: tab events refresh `rows` far more often than that set does.
+   */
+  async function loadThumbs(urls: readonly string[]): Promise<void> {
+    const token = ++thumbToken;
+    try {
+      const found = await imageThumbsForPages(urls);
+      if (token !== thumbToken) return;
+      revokeThumbs();
+      const next = new Map<string, string>();
+      for (const [page, row] of found) next.set(page, URL.createObjectURL(row.preview ?? row.blob));
+      thumbs = next;
+    } catch {
+      // A cache that cannot be read leaves every row without a thumb.
+    }
+  }
+
+  $effect(() => {
+    const signature = asleepUrls.join('|');
+    if (signature === thumbSig) return;
+    thumbSig = signature;
+    void loadThumbs(asleepUrls);
+  });
+
   onMount(() => {
     void refresh();
     // Countdowns stay honest while the panel is open; the tick is display-only.
@@ -138,6 +176,7 @@
     chrome.tabGroups.onCreated?.addListener(onChange);
     chrome.tabGroups.onRemoved?.addListener(onChange);
     return () => {
+      revokeThumbs();
       clearInterval(tick);
       chrome.tabs.onUpdated.removeListener(onChange);
       chrome.tabs.onRemoved.removeListener(onChange);
@@ -331,6 +370,7 @@
           {@const tab = item.row}
           {@const state = stateFor(tab)}
           {@const asleep = state.kind === 'asleep'}
+          {@const thumb = thumbs.get(tab.url)}
           <div class="absolute left-0 w-full" style="transform:translateY({entry.start}px)">
             <div
               class="group flex h-12 items-start gap-2 border-b border-line/70 px-3 py-2 {tab.active
@@ -345,6 +385,13 @@
               >
                 <Icon name={STATE_ICON[state.kind]} size={13} />
               </span>
+              {#if asleep && thumb !== undefined}
+                <img
+                  src={thumb}
+                  alt=""
+                  class="mt-0.5 h-8 w-11 shrink-0 rounded border border-line object-cover"
+                />
+              {/if}
               <div class="min-w-0 flex-1">
                 <p
                   class="truncate text-[13px] {tab.active ? 'font-semibold text-ink' : asleep ? 'text-dim' : 'text-ink'}"
