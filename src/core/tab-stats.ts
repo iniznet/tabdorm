@@ -1,3 +1,4 @@
+import { createSerializer } from './serialize';
 import type { TabStat } from './stale';
 
 /**
@@ -15,17 +16,8 @@ const STATS_KEY = 'tabdorm:tabStats';
 
 export type TabStats = Record<string, TabStat>;
 
-/** Serialized read-modify-write chain — bursty tab events have no transactions. */
-let chain: Promise<unknown> = Promise.resolve();
-
-function serialize<T>(task: () => Promise<T>): Promise<T> {
-  const run = chain.then(task, task);
-  chain = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  return run;
-}
+/** One queue for this module's visit-record writes. */
+const serialize = createSerializer();
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
