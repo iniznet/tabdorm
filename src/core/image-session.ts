@@ -30,6 +30,54 @@ export function tabOfSessionKey(key: string): number | null {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
+/** Same prefix `blobImageKey` uses offline. A value import of that module would
+ *  break the node test runner, so the test pins the two to one literal instead. */
+const BLOB_KEY_PREFIX = 'blob-sha256:';
+
+/** Sources whose bytes live in the page, unreachable by a worker's fetch. */
+const INLINE_PREFIXES: readonly string[] = ['blob:', 'data:image/'];
+
+/**
+ * True when only the page can read this picture: a `blob:` url resolves in the
+ * context that created it, and a `data:` url carries the bytes itself.
+ */
+export function isInlineImageSource(src: string): boolean {
+  return INLINE_PREFIXES.some((prefix) => src.startsWith(prefix));
+}
+
+/**
+ * Bytes a base64 payload stands for, from its length alone. An unreadable or
+ * non-image payload reports 0, which is never a refusal on its own.
+ */
+export function declaredBytesOfDataUrl(dataUrl: string): number {
+  if (!dataUrl.startsWith('data:image/')) return 0;
+  const comma = dataUrl.indexOf(',');
+  if (comma < 0) return 0;
+  const body = dataUrl.length - comma - 1;
+  if (body <= 0) return 0;
+  return Math.floor((body * 3) / 4);
+}
+
+/**
+ * Pre-read filter for an inline picture: a rendered box proves it matters, so the
+ * pixel floor decides here and the byte ceiling waits for the payload's real size.
+ */
+export function shouldReadInline(pixels: number, config: ImageCacheConfig): boolean {
+  // No measured box means the picture was announced before it rendered, so the
+  // byte floor decides after the payload arrives, the same way a transfer-only
+  // candidate is judged. A rendered box below the floor is still a skip.
+  return pixels <= 0 || pixels >= config.minPixels;
+}
+
+/**
+ * Session key for an inline picture. The digest is the key, so a viewer that
+ * mints a fresh `blob:` uuid on every render overwrites its own row instead of
+ * piling up copies of one picture.
+ */
+export function inlineSessionKey(tabId: number, digest: string): string {
+  return sessionKey(tabId, BLOB_KEY_PREFIX + digest);
+}
+
 /**
  * Post-read filter for a candidate captured without a rendered box: a byte floor
  * keeps tracking pixels and spacers out where pixel area cannot, and the size

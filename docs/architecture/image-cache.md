@@ -32,7 +32,7 @@ graph LR
 
 - **Rules**: `core/image-cache.ts` and `core/image-session.ts`, both pure. Key normalization, cacheability, TTL and LRU for the offline store; session keys, byte floor, session budgets, promotion mapping, and refusal guards for the session band.
 - **Store**: `core/image-store.ts` over Dexie tables `images` and `sessionImages` in database `tabdorm` (`version(4)`).
-- **Awake capture**: `core/session-capture.ts`, driven by the announce band in `public/image-cache.js` and the `imageCandidates` message.
+- **Awake capture**: `core/session-capture.ts`, driven by the announce band in `public/image-cache.js` and the `imageCandidates` message. The page sends the bytes for a `blob:` or `data:` picture, capped at 24 MB per picture, 48 MB per page, and 30 inline pictures per page.
 - **Suspend capture**: `core/image-capture.ts`, called from inside `discardTabSafe()` after promotion.
 - **Replay**: `public/image-cache.js` plus the `images:lookup` message handler.
 
@@ -51,6 +51,8 @@ graph LR
 | A session row never outlives its tab | `tabs.onRemoved` purges it and browser start empties the band, so a reused tab id can never inherit bytes |
 | Promotion is a move, never a copy | the upsert and the delete share one Dexie transaction, so a crash cannot leave the bytes in both bands |
 | A key the offline store already holds is touched, not copied | an awake page that reloads its own gallery must not double the bytes, and a wake must never demote a row |
+| An inline picture is read in the page, never by the worker | a `blob:` url resolves only in the context that created it, and a `data:` url carries its own bytes, so the worker's fetch can reach neither |
+| An inline row is keyed by its own digest | a viewer mints a fresh `blob:` uuid on every render, so a url key would pile up copies of one picture, and the digest makes the session key agree with the offline one |
 | Awake capture adds no manifest permission | it reuses the optional `scripting` + `<all_urls>` grant the enable switch already asks for, and the script runs only while the feature is on |
 | A read is refused before the body when `Content-Length` exceeds the ceiling | a 40 MB picture must not be downloaded into the worker to be thrown away |
 | One read is hard-capped at 64 MB whatever the config says | the ceiling is a user choice, the cap is memory safety |
@@ -75,3 +77,4 @@ graph LR
 - Sweep: TTL deletion then LRU eviction on the offline store, budget eviction on the session band, armed on the existing alarm cadence.
 - Storage location: IndexedDB `tabdorm` stores `images` and `sessionImages`, inside the extension origin, covered by the existing `navigator.storage.persist()` request.
 - Probe: open a gallery page, watch Options → Images totals rise before any suspend, then sleep the tab and confirm the rows moved to the offline band and the tab repaints.
+- Probe for a viewer that paints `blob:` pictures: Options → Images rises while the tab stays awake, and each row is one picture rather than a fresh copy per render.
