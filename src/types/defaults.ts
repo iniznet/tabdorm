@@ -1,7 +1,9 @@
 import {
+  GROUP_ORDER_MODES,
   VALID_GROUP_COLORS,
   type AutoRouteRule,
   type CloseFocusMode,
+  type GroupOrderMode,
   type TabDormConfig,
 } from './config';
 
@@ -33,6 +35,7 @@ export const DEFAULT_TAB_DORM_CONFIG: TabDormConfig = {
     suspendOnGroupCollapse: false,
     collapseOnSwitch: false,
     autoCollapseOnIdleMinutes: 0,
+    orderOnActivate: 'bottom',
     routing: {
       enabled: true,
       reRouteAlreadyGrouped: false,
@@ -115,6 +118,12 @@ const CLOSE_FOCUS_MODES: readonly CloseFocusMode[] = [
   'previous-other-group',
 ];
 
+function readGroupOrderMode(value: unknown): GroupOrderMode {
+  return typeof value === 'string' && (GROUP_ORDER_MODES as readonly string[]).includes(value)
+    ? (value as GroupOrderMode)
+    : DEFAULT_TAB_DORM_CONFIG.groups.orderOnActivate;
+}
+
 function readCloseFocusMode(value: unknown): CloseFocusMode {
   return typeof value === 'string' && (CLOSE_FOCUS_MODES as readonly string[]).includes(value)
     ? (value as CloseFocusMode)
@@ -191,6 +200,7 @@ export function resolveConfig(raw: unknown): TabDormConfig {
       suspendOnGroupCollapse: readBool(g['suspendOnGroupCollapse'], DEFAULT_TAB_DORM_CONFIG.groups.suspendOnGroupCollapse),
       collapseOnSwitch: readBool(g['collapseOnSwitch'], DEFAULT_TAB_DORM_CONFIG.groups.collapseOnSwitch),
       autoCollapseOnIdleMinutes: clampNumber(g['autoCollapseOnIdleMinutes'], DEFAULT_TAB_DORM_CONFIG.groups.autoCollapseOnIdleMinutes, b.autoCollapseOnIdleMinutes.min, b.autoCollapseOnIdleMinutes.max),
+      orderOnActivate: readGroupOrderMode(g['orderOnActivate']),
       routing: {
         enabled: readBool(r['enabled'], DEFAULT_TAB_DORM_CONFIG.groups.routing.enabled),
         reRouteAlreadyGrouped: readBool(r['reRouteAlreadyGrouped'], DEFAULT_TAB_DORM_CONFIG.groups.routing.reRouteAlreadyGrouped),

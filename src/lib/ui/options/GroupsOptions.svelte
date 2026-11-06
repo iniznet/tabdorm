@@ -1,9 +1,22 @@
 <script lang="ts">
   import Toggle from '@/lib/ui/controls/Toggle.svelte';
   import NumberField from '@/lib/ui/controls/NumberField.svelte';
+  import SelectField from '@/lib/ui/controls/SelectField.svelte';
   import Icon from '@/lib/ui/Icon.svelte';
   import { ruleToRegExp } from '@/core/auto-route';
-  import { VALID_GROUP_COLORS, type AutoRouteRule, type GroupColor, type TabDormConfig } from '@/types';
+  import {
+    VALID_GROUP_COLORS,
+    type AutoRouteRule,
+    type GroupColor,
+    type GroupOrderMode,
+    type TabDormConfig,
+  } from '@/types';
+
+  const ORDER_OPTIONS: readonly { value: GroupOrderMode; label: string }[] = [
+    { value: 'off', label: 'Do not move' },
+    { value: 'bottom', label: 'Move to bottom' },
+    { value: 'top', label: 'Move to top' },
+  ];
 
   interface Props {
     config: TabDormConfig;
@@ -93,6 +106,13 @@
       max={10080}
       suffix="min"
       onChange={(v) => onChange((d) => (d.groups.autoCollapseOnIdleMinutes = v))}
+    />
+    <SelectField
+      value={config.groups.orderOnActivate}
+      label="Move the group you switch to"
+      hint="Keeps the group you are working in at one end of the strip."
+      options={ORDER_OPTIONS}
+      onChange={(v) => onChange((d) => (d.groups.orderOnActivate = v as GroupOrderMode))}
     />
     <Toggle
       checked={config.groups.routing.enabled}

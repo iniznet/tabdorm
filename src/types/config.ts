@@ -17,6 +17,15 @@ export interface AutoRouteRule {
  */
 export type CloseFocusMode = 'browser' | 'previous-tab' | 'previous-other-group';
 
+/**
+ * Where a group moves when you activate one of its tabs: nowhere, to the top of the
+ * strip, or to the bottom. Keeps the group you are working in at one end.
+ */
+export type GroupOrderMode = 'off' | 'top' | 'bottom';
+
+/** Whitelist for {@link GroupOrderMode}. An unknown stored value resolves to 'bottom'. */
+export const GROUP_ORDER_MODES: readonly GroupOrderMode[] = ['off', 'top', 'bottom'];
+
 /** Fully-typed configuration. Every timer, threshold, and rule lives here — zero hardcoding. */
 export interface TabDormConfig {
   schemaVersion: number;
@@ -50,6 +59,8 @@ export interface TabDormConfig {
     suspendOnGroupCollapse: boolean;
     collapseOnSwitch: boolean;
     autoCollapseOnIdleMinutes: number;
+    /** Move the activated group to one end of the strip. */
+    orderOnActivate: GroupOrderMode;
     routing: {
       enabled: boolean;
       reRouteAlreadyGrouped: boolean;
