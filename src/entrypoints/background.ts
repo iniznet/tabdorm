@@ -12,6 +12,7 @@ import { applyImageCacheSync, lookupCachedImages } from '@/core/image-replay';
 import { clearAllImages, clearImagesForHost, imageHostStats, imageTotals, sweepImages } from '@/core/image-store';
 import { reportBatteryState } from '@/core/battery';
 import { discardTabSafe, flushPendingDiscard } from '@/core/discard';
+import { pickFocusCandidate } from '@/core/tab-focus';
 import { closeDuplicateTabs } from '@/core/close-duplicates';
 import { initIdleGuard } from '@/core/idle-guard';
 import { backfillRouting, routeCommittedNavigation } from '@/core/auto-route';
@@ -179,6 +180,20 @@ async function handleMessage(
       const outcome = await discardTabSafe(request.tabId);
       await updateAsleepBadge();
       return outcome;
+    }
+    case 'suspendActiveTab': {
+      // Chromium refuses to discard the active tab, so focus moves first. The
+      // whole sequence lives here because the popup window closes the moment
+      // focus leaves it, which would cancel a half-finished click.
+      const [active] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      if (active?.id === undefined) return { outcome: 'failed', reason: 'no_active_tab' };
+      const tabs = await chrome.tabs.query({ windowId: active.windowId });
+      const next = pickFocusCandidate(tabs, active.id);
+      if (next?.id === undefined) return { outcome: 'skipped', reason: 'no_sibling' };
+      await chrome.tabs.update(next.id, { active: true });
+      const outcome = await discardTabSafe(active.id);
+      await updateAsleepBadge();
+      return { outcome, focusedTabId: next.id };
     }
     case 'restoreSession':
       return restoreSession(request.sessionId, request.screen, {

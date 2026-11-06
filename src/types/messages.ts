@@ -11,6 +11,7 @@ export type BackgroundRequest =
   | { type: 'snapshotNow' }
   | { type: 'runSweep' }
   | { type: 'suspendTab'; tabId: number }
+  | { type: 'suspendActiveTab' }
   | { type: 'restoreSession'; sessionId: string; screen: { availWidth: number; availHeight: number }; destination?: RestoreDestination; selection?: RestoreSelectionEntry[] }
   | { type: 'migrateTms' }
   | { type: 'openUrlList'; urls: string[] }
@@ -33,6 +34,7 @@ const REQUEST_TYPES: readonly RequestType[] = [
   'snapshotNow',
   'runSweep',
   'suspendTab',
+  'suspendActiveTab',
   'restoreSession',
   'migrateTms',
   'openUrlList',
@@ -92,6 +94,8 @@ export function parseBackgroundRequest(raw: unknown): { ok: true; request: Backg
       }
       return { ok: true, request: { type, pageUrl, keys: keys as string[] } };
     }
+    case 'suspendActiveTab':
+      return { ok: true, request: { type } };
     case 'suspendTab': {
       const tabId = candidate['tabId'];
       if (typeof tabId !== 'number' || !Number.isInteger(tabId)) return { ok: false, error: 'suspendTab requires an integer tabId.' };
