@@ -10,6 +10,7 @@
     "build": "wxt build",
     "zip": "wxt zip",
     "compile": "tsc --noEmit",
+    "test": "node --test tests/",
     "icons": "node scripts/build-icons.mjs",
     "prepare": "wxt prepare",
     "brand:preview": "node scripts/brand-preview.mjs",
