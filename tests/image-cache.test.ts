@@ -6,6 +6,7 @@ import {
   hostOfUrl,
   isCacheableImageUrl,
   nextGalleryWindow,
+  selectCaptureCandidates,
   normalizeImageKey,
   selectExpired,
   selectOverBudget,
@@ -139,6 +140,43 @@ test('gallery pages walk a stable store without repeating a key', () => {
   assert.deepEqual(nextGalleryWindow(55, 0, 24), { offset: 0, limit: 24 });
   assert.deepEqual(nextGalleryWindow(55, 24, 24), { offset: 24, limit: 24 });
   assert.deepEqual(nextGalleryWindow(55, 48, 24), { offset: 48, limit: 7 });
+});
+
+test('capture keeps the biggest candidates, not the first ones', () => {
+  const page = [
+    { src: 'avatar', pixels: 900 },
+    { src: 'hero', pixels: 1_200_000 },
+    { src: 'icon', pixels: 256 },
+    { src: 'figure', pixels: 40_000 },
+    { src: 'sprite', pixels: 4_096 },
+  ];
+  assert.deepEqual(
+    selectCaptureCandidates(page, 3).map((candidate) => candidate.src),
+    ['hero', 'figure', 'sprite'],
+  );
+});
+
+test('capture keeps page order inside a tie, so two runs agree', () => {
+  const page = [
+    { src: 'first', pixels: 10_000 },
+    { src: 'second', pixels: 10_000 },
+    { src: 'third', pixels: 10_000 },
+  ];
+  assert.deepEqual(
+    selectCaptureCandidates(page, 2).map((candidate) => candidate.src),
+    ['first', 'second'],
+  );
+});
+
+test('capture drops unmeasured candidates and honours a zero limit', () => {
+  const page = [
+    { src: 'lazy', pixels: 0 },
+    { src: 'nan', pixels: Number.NaN },
+    { src: 'real', pixels: 25_000 },
+  ];
+  assert.deepEqual(selectCaptureCandidates(page, 10).map((candidate) => candidate.src), ['real']);
+  assert.deepEqual(selectCaptureCandidates(page, 0), []);
+  assert.deepEqual(selectCaptureCandidates([], 10), []);
 });
 
 test('gallery window clamps when the store shrank under the grid', () => {
