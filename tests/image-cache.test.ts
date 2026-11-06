@@ -5,6 +5,7 @@ import {
   formatByteSize,
   hostOfUrl,
   isCacheableImageUrl,
+  nextGalleryWindow,
   normalizeImageKey,
   selectExpired,
   selectOverBudget,
@@ -132,4 +133,16 @@ test('selectOverBudget breaks a lastUsed tie by key so the order is total', () =
   ];
   assert.deepEqual(selectOverBudget(records, 10), ['a', 'b']);
   assert.deepEqual(selectOverBudget(records, 20), ['a']);
+});
+
+test('gallery pages walk a stable store without repeating a key', () => {
+  assert.deepEqual(nextGalleryWindow(55, 0, 24), { offset: 0, limit: 24 });
+  assert.deepEqual(nextGalleryWindow(55, 24, 24), { offset: 24, limit: 24 });
+  assert.deepEqual(nextGalleryWindow(55, 48, 24), { offset: 48, limit: 7 });
+});
+
+test('gallery window clamps when the store shrank under the grid', () => {
+  assert.deepEqual(nextGalleryWindow(30, 48, 24), { offset: 30, limit: 0 });
+  assert.deepEqual(nextGalleryWindow(0, 0, 24), { offset: 0, limit: 0 });
+  assert.deepEqual(nextGalleryWindow(55, 55, 24), { offset: 55, limit: 0 });
 });
