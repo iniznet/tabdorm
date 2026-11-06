@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   exceedsByteCeiling,
+  fitWithin,
   formatByteSize,
   hostOfUrl,
   isCacheableImageUrl,
@@ -177,6 +178,19 @@ test('capture drops unmeasured candidates and honours a zero limit', () => {
   assert.deepEqual(selectCaptureCandidates(page, 10).map((candidate) => candidate.src), ['real']);
   assert.deepEqual(selectCaptureCandidates(page, 0), []);
   assert.deepEqual(selectCaptureCandidates([], 10), []);
+});
+
+test('preview box keeps the aspect ratio inside the edge', () => {
+  assert.deepEqual(fitWithin(1_200, 800, 480), { width: 480, height: 320 });
+  assert.deepEqual(fitWithin(800, 1_200, 480), { width: 320, height: 480 });
+  assert.deepEqual(fitWithin(480, 480, 480), { width: 480, height: 480 });
+});
+
+test('preview box never upscales and collapses invalid input', () => {
+  assert.deepEqual(fitWithin(120, 90, 480), { width: 120, height: 90 });
+  assert.deepEqual(fitWithin(0, 90, 480), { width: 0, height: 0 });
+  assert.deepEqual(fitWithin(120, Number.NaN, 480), { width: 0, height: 0 });
+  assert.deepEqual(fitWithin(120, 90, 0), { width: 0, height: 0 });
 });
 
 test('gallery window clamps when the store shrank under the grid', () => {

@@ -1,6 +1,7 @@
 import { getConfig } from './config-store';
 import {
   exceedsByteCeiling,
+  fitWithin,
   hostOfUrl,
   isCacheableImageUrl,
   normalizeImageKey,
@@ -95,6 +96,42 @@ async function hasCaptureGrant(): Promise<boolean> {
   }
 }
 
+/** Longest edge of a grid preview. Presentation, so it is not a config knob. */
+const PREVIEW_EDGE = 480;
+
+/**
+ * Small copy for the gallery grid. The grid paints 24 tiles, and decoding the
+ * full picture for each one is the memory cost this avoids. A service worker has
+ * no DOM, so the downscale runs on an OffscreenCanvas; any failure leaves the
+ * record without a preview and the grid falls back to the original.
+ */
+async function makePreview(blob: Blob): Promise<Blob | null> {
+  try {
+    const bitmap = await createImageBitmap(blob);
+    const box = fitWithin(bitmap.width, bitmap.height, PREVIEW_EDGE);
+    if (box.width === 0 || box.height === 0) {
+      bitmap.close();
+      return null;
+    }
+    // Already this small: the original is its own preview.
+    if (box.width === bitmap.width && box.height === bitmap.height) {
+      bitmap.close();
+      return null;
+    }
+    const canvas = new OffscreenCanvas(box.width, box.height);
+    const context = canvas.getContext('2d');
+    if (context === null) {
+      bitmap.close();
+      return null;
+    }
+    context.drawImage(bitmap, 0, 0, box.width, box.height);
+    bitmap.close();
+    return await canvas.convertToBlob({ type: 'image/webp', quality: 0.72 });
+  } catch {
+    return null;
+  }
+}
+
 /** Fetches one candidate, or null when it is not worth keeping. */
 async function fetchCandidate(
   key: string,
@@ -118,7 +155,18 @@ async function fetchCandidate(
     // A CDN answering with HTML for a missing image is not an image.
     if (!mime.startsWith('image/')) return null;
     const now = Date.now();
-    return { key, host, pageUrl, mime, size: blob.size, savedAt: now, lastUsed: now, blob };
+    const preview = await makePreview(blob);
+    return {
+      key,
+      host,
+      pageUrl,
+      mime,
+      size: blob.size,
+      savedAt: now,
+      lastUsed: now,
+      blob,
+      ...(preview === null ? {} : { preview }),
+    };
   } catch {
     return null;
   }
