@@ -3,7 +3,14 @@
   import Icon from '@/lib/ui/Icon.svelte';
   import { formatByteSize, nextGalleryWindow } from '@/core/image-cache';
   import { imageGalleryPage, imageTotals } from '@/core/image-store';
-  import type { CachedImage } from '@/types';
+  import type { CachedImage, TabDormConfig } from '@/types';
+
+  interface Props {
+    config: TabDormConfig;
+    onChange: (mutate: (draft: TabDormConfig) => void) => void;
+  }
+
+  let { config, onChange }: Props = $props();
 
   /** Cards per fetch. Presentation only, so it is not a config knob. */
   const PAGE_SIZE = 24;
@@ -25,6 +32,7 @@
   let error = $state('');
   let selected = $state<Card | null>(null);
   let closeButton = $state<HTMLButtonElement | null>(null);
+  let permissionNote = $state('');
 
   /** Live object URLs, revoked on refresh and on teardown so no blob is pinned. */
   const liveUrls = new Set<string>();
@@ -85,6 +93,21 @@
     selected = null;
   }
 
+  /**
+   * Capture reads the page DOM before a discard, which needs the optional broad
+   * grant. The write goes through the parent's onChange, the single config path;
+   * a refused grant keeps the cache off and says so.
+   */
+  async function enableCache(): Promise<void> {
+    permissionNote = '';
+    const granted = await chrome.permissions.request({ permissions: ['scripting'], origins: ['<all_urls>'] });
+    if (!granted) {
+      permissionNote = 'Permission not granted, so the image cache stays off.';
+      return;
+    }
+    onChange((draft) => (draft.images.enabled = true));
+  }
+
   onMount(() => {
     void reload();
     return revokeAll;
@@ -130,10 +153,25 @@
     {:else if cards.length === 0}
       <div class="rounded-lg border border-line bg-raised px-4 py-6 text-center">
         <Icon name="camera" size={20} class="mx-auto text-faint" />
-        <p class="mt-2 text-[13px] text-ink">No images cached yet</p>
-        <p class="mt-1 text-[12px] text-dim">
-          Turn on the image cache above. Pictures from a sleeping tab show up here once it saves them.
-        </p>
+        {#if config.images.enabled}
+          <p class="mt-2 text-[13px] text-ink">Nothing cached yet</p>
+          <p class="mt-1 text-[12px] text-dim">
+            Pictures are saved when a tab falls asleep. Suspend one, then press Refresh.
+          </p>
+        {:else}
+          <p class="mt-2 text-[13px] text-ink">Image cache is off</p>
+          <p class="mt-1 text-[12px] text-dim">
+            TabDorm keeps nothing until you switch it on. Reading a page's pictures needs a one-time permission.
+          </p>
+          <button
+            type="button"
+            class="mt-3 rounded-md bg-awake px-3 py-1.5 text-[12px] font-semibold text-on-awake transition-colors duration-120 hover:bg-accent-strong"
+            onclick={() => void enableCache()}>Turn on the image cache</button
+          >
+        {/if}
+        {#if permissionNote !== ''}
+          <p class="mt-2 text-[12px] text-bad" role="alert">{permissionNote}</p>
+        {/if}
       </div>
     {:else}
       <div class="grid grid-cols-2 gap-2 min-[520px]:grid-cols-3 min-[760px]:grid-cols-4">
