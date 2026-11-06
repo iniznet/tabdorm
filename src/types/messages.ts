@@ -18,7 +18,10 @@ export type BackgroundRequest =
   | { type: 'closeDuplicates'; tabIds: number[] }
   | { type: 'dirtyForm' }
   | { type: 'clearDirtyForm' }
-  | { type: 'imagesLookup'; pageUrl: string; keys: string[] };
+  | { type: 'imagesLookup'; pageUrl: string; keys: string[] }
+  | { type: 'imagesStats' }
+  | { type: 'imagesClearHost'; host: string }
+  | { type: 'imagesClearAll' };
 
 export type BackgroundResponse =
   | { ok: true; payload?: unknown }
@@ -38,6 +41,9 @@ const REQUEST_TYPES: readonly RequestType[] = [
   'dirtyForm',
   'clearDirtyForm',
   'imagesLookup',
+  'imagesStats',
+  'imagesClearHost',
+  'imagesClearAll',
 ];
 
 const RESTORE_DESTINATIONS: readonly RestoreDestination[] = ['original', 'single', 'current'];
@@ -60,6 +66,16 @@ export function parseBackgroundRequest(raw: unknown): { ok: true; request: Backg
     case 'dirtyForm':
     case 'clearDirtyForm':
       return { ok: true, request: { type } };
+    case 'imagesStats':
+    case 'imagesClearAll':
+      return { ok: true, request: { type } };
+    case 'imagesClearHost': {
+      const host = candidate['host'];
+      if (typeof host !== 'string' || host === '') {
+        return { ok: false, error: 'imagesClearHost requires a host.' };
+      }
+      return { ok: true, request: { type, host } };
+    }
     case 'imagesLookup': {
       const pageUrl = candidate['pageUrl'];
       const keys = candidate['keys'];

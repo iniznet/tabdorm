@@ -1,6 +1,7 @@
 <script lang="ts">
   import { sendToBackground } from '@/core/messaging';
   import { parseMarvellousSuspenderUrl } from '@/core/sanitize';
+  import { formatByteSize, hostOfUrl } from '@/core/image-cache';
   import Icon from '@/lib/ui/Icon.svelte';
 
   let status: string = $state('');
@@ -35,6 +36,29 @@
     const res = await sendToBackground({ type: 'runSweep' });
     if (res.ok) say(`Suspended ${String((res.payload as { discarded?: number })?.discarded ?? 0)} tab(s).`);
     else say(`Failed: ${res.error}`, 'bad');
+    busy = false;
+  }
+
+  /**
+   * Scoped clear for the tab you are looking at. Rows are keyed by image URL, not
+   * by tab, so this empties the site's entries: two tabs of one site share them.
+   */
+  async function clearTabImages(): Promise<void> {
+    busy = true;
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    const host = tab?.url === undefined ? null : hostOfUrl(tab.url);
+    if (host === null) {
+      say('No site to clear here.', 'bad');
+      busy = false;
+      return;
+    }
+    const res = await sendToBackground({ type: 'imagesClearHost', host });
+    if (res.ok) {
+      const payload = res.payload as { removed?: number; bytes?: number } | undefined;
+      say(`Cleared ${payload?.removed ?? 0} image(s), ${formatByteSize(payload?.bytes ?? 0)}, for ${host}.`);
+    } else {
+      say(`Failed: ${res.error}`, 'bad');
+    }
     busy = false;
   }
 
@@ -90,6 +114,14 @@
     onclick={() => void suspendInactive()}>
     <Icon name="moon" size={14} class="shrink-0" />
     <span class="min-w-0 flex-1">Suspend inactive tabs</span>
+  </button>
+
+  <button
+    class="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[13px] text-dim transition-colors duration-120 hover:bg-overlay hover:text-ink disabled:opacity-40"
+    disabled={busy}
+    onclick={() => void clearTabImages()}>
+    <Icon name="trash" size={14} class="shrink-0" />
+    <span class="min-w-0 flex-1">Clear cached images for this site</span>
   </button>
 
   <button

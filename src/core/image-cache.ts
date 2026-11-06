@@ -67,6 +67,14 @@ export function exceedsByteCeiling(bytes: number, config: ImageCacheConfig): boo
   return bytes > config.maxImageKilobytes * 1024;
 }
 
+/** Human byte size for readouts: `0 B`, `940 B`, `12.4 KB`, `1.8 MB`. */
+export function formatByteSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  if (bytes < 1_024) return `${Math.round(bytes)} B`;
+  if (bytes < 1_024 * 1_024) return `${(bytes / 1_024).toFixed(1)} KB`;
+  return `${(bytes / (1_024 * 1_024)).toFixed(1)} MB`;
+}
+
 /** The configured TTL in milliseconds. */
 export function ttlMsOf(config: ImageCacheConfig): number {
   return config.ttlMinutes * 60_000;

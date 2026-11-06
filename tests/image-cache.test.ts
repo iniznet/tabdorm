@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   exceedsByteCeiling,
+  formatByteSize,
   hostOfUrl,
   isCacheableImageUrl,
   normalizeImageKey,
@@ -66,6 +67,14 @@ test('the byte ceiling refuses empty bodies and oversized images', () => {
   assert.equal(exceedsByteCeiling(512 * 1024, config()), false);
   assert.equal(exceedsByteCeiling(512 * 1024 + 1, config()), true);
   assert.equal(exceedsByteCeiling(900 * 1024, config({ maxImageKilobytes: 1_024 })), false);
+});
+
+test('formatByteSize stays readable across the three magnitudes', () => {
+  assert.equal(formatByteSize(0), '0 B');
+  assert.equal(formatByteSize(-5), '0 B');
+  assert.equal(formatByteSize(940), '940 B');
+  assert.equal(formatByteSize(12_697), '12.4 KB');
+  assert.equal(formatByteSize(1_887_437), '1.8 MB');
 });
 
 test('ttlMsOf converts minutes to milliseconds', () => {
