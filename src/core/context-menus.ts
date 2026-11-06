@@ -4,6 +4,7 @@ import { getDirtyFormTabs } from './form-guard';
 import { discardTabSafe } from './discard';
 import { evaluateSuspension } from './suspension';
 import { safeTabUrl } from './sanitize';
+import { supportsTabContext } from './menu-context';
 import { hostnamePattern } from './whitelist';
 
 const MENU_SUSPEND_TAB = 'tabdorm:suspend-tab';
@@ -20,27 +21,44 @@ type MenuContexts = [`${chrome.contextMenus.ContextType}`, ...`${chrome.contextM
 const TAB_CONTEXTS: MenuContexts = ['tab'];
 const PAGE_CONTEXTS: MenuContexts = ['page'];
 
+
+
 const MENU_ITEMS = [
   { id: MENU_SUSPEND_TAB, title: 'Suspend this tab' },
   { id: MENU_SUSPEND_OTHERS, title: 'Suspend other tabs in this window' },
   { id: MENU_NEVER, title: 'Never suspend this site' },
 ] as const;
 
-/** Creates the tab context menus idempotently — SW restarts wipe registrations. */
+/**
+ * Creates the tab context menus idempotently — SW restarts wipe registrations.
+ *
+ * A rejected context arrives in two shapes, and both are handled here: a
+ * synchronous throw out of `create`, which escapes into the extension error
+ * page if uncaught, and an asynchronous `runtime.lastError` on older builds.
+ * One failure switches every item to page context, because a partially created
+ * menu is worse than a consistent one.
+ */
 export function initContextMenus(): void {
-  const state = { fellBack: false };
+  let fellBack = false;
   const register = (contexts: MenuContexts): void => {
     for (const item of MENU_ITEMS) {
-      chrome.contextMenus.create({ ...item, contexts }, () => {
-        if (state.fellBack || !chrome.runtime.lastError) return;
-        // Older Chrome refuses the tab context; retry once with page context so
-        // the menu exists at all instead of failing into the error page.
-        state.fellBack = true;
-        chrome.contextMenus.removeAll(() => register(PAGE_CONTEXTS));
-      });
+      if (fellBack) return;
+      try {
+        chrome.contextMenus.create({ ...item, contexts }, () => {
+          if (chrome.runtime.lastError !== undefined) fallBack();
+        });
+      } catch {
+        fallBack();
+      }
     }
   };
-  chrome.contextMenus.removeAll(() => register(TAB_CONTEXTS));
+  const fallBack = (): void => {
+    if (fellBack) return;
+    fellBack = true;
+    chrome.contextMenus.removeAll(() => register(PAGE_CONTEXTS));
+  };
+  const preferred = supportsTabContext(navigator.userAgent) ? TAB_CONTEXTS : PAGE_CONTEXTS;
+  chrome.contextMenus.removeAll(() => register(preferred));
   chrome.contextMenus.onClicked.addListener((info, tab) => {
     void handleMenuClick(info, tab);
   });
