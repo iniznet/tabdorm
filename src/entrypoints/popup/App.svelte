@@ -99,6 +99,12 @@
     window.close();
   }
 
+  /** Straight to the grid: the reader asked for pictures, not the settings rail. */
+  function openGallery(): void {
+    void chrome.tabs.create({ url: chrome.runtime.getURL('options.html#gallery') });
+    window.close();
+  }
+
   function openSettings(): void {
     void chrome.runtime.openOptionsPage();
     window.close();
@@ -143,6 +149,13 @@
     onclick={() => void suspendInactive()}>
     <Icon name="moon" size={14} class="shrink-0" />
     <span class="min-w-0 flex-1">Suspend inactive tabs</span>
+  </button>
+
+  <button
+    class="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[13px] text-dim transition-colors duration-120 hover:bg-overlay hover:text-ink"
+    onclick={openGallery}>
+    <Icon name="camera" size={14} class="shrink-0" />
+    <span class="min-w-0 flex-1">Cached images</span>
   </button>
 
   <button

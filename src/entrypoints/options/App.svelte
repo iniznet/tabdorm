@@ -142,7 +142,7 @@
         <RestorationOptions {config} onChange={update} />
         <SnapshotsOptions {config} onChange={update} />
         <ImagesOptions {config} onChange={update} />
-        <GalleryOptions />
+        <GalleryOptions {config} onChange={update} />
         <Section id="data" title="Data & backup" description="Destructive operations. Export first — there is no undo.">
           <DangerZone {config} onImported={onImported} />
         </Section>
