@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  blobImageKey,
   exceedsByteCeiling,
   fitWithin,
   formatByteSize,
@@ -142,6 +143,14 @@ test('gallery pages walk a stable store without repeating a key', () => {
   assert.deepEqual(nextGalleryWindow(55, 0, 24), { offset: 0, limit: 24 });
   assert.deepEqual(nextGalleryWindow(55, 24, 24), { offset: 24, limit: 24 });
   assert.deepEqual(nextGalleryWindow(55, 48, 24), { offset: 48, limit: 7 });
+});
+
+test('blob keys sit outside the url space, so replay can never match one', () => {
+  const key = blobImageKey('9bce47fd4324d9a9');
+  assert.equal(key, 'blob-sha256:9bce47fd4324d9a9');
+  // Not an http(s) url: the replay script matches page urls and skips this record.
+  assert.equal(normalizeImageKey(key, 'https://e-hentai.org/s/1'), null);
+  assert.notEqual(blobImageKey('0000000000000000'), key);
 });
 
 test('capture keeps the biggest candidates, not the first ones', () => {

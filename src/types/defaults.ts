@@ -58,7 +58,7 @@ export const DEFAULT_TAB_DORM_CONFIG: TabDormConfig = {
     enabled: false,
     ttlMinutes: 1_440,
     maxMegabytes: 64,
-    maxImageKilobytes: 512,
+    maxImageKilobytes: 1_024,
     minPixels: 4_096,
     captureDeadlineMs: 1_500,
   },

@@ -137,6 +137,16 @@ export function fitWithin(
   return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
 }
 
+/**
+ * Key for bytes harvested from a page-created `blob:` url, which a worker can
+ * never fetch. Deliberately not a url, and never normalized: the replay script
+ * matches page urls, so this record feeds the gallery and the thumbnail only.
+ * The digest makes a re-capture of the same picture overwrite itself, not pile up.
+ */
+export function blobImageKey(digest: string): string {
+  return `blob-sha256:${digest}`;
+}
+
 /** Human byte size for readouts: `0 B`, `940 B`, `12.4 KB`, `1.8 MB`. */
 export function formatByteSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
