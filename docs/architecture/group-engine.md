@@ -30,6 +30,10 @@ A long strip buries the group you are working in. The activated group can move t
 - `applyActiveGroupOrder()` (`src/core/move-groups.ts`) runs on every activation and is the only writer of `chrome.tabGroups.move`.
 - `chrome.tabGroups` exposes no index on a TabGroup, so strip order is derived from tab order: a group sits where its leftmost member sits. Ungrouped tabs are ignored.
 - A move happens only when the group is not already at the requested end, so a second activation inside the same group writes nothing. `-1` means "end of window" to Chrome, `0` means first.
+- **Invariant.** A pass writes nothing once its tab has lost the window's active slot — `planActiveGroupOrder()` in the pure `core/group-order.ts` returns null there. Closing a tab fires two activations, so two passes overlap.
+- One chain per window (`move-groups.ts`) serializes those overlapping passes, so the final order follows the last activation, not the last resolved promise.
+- The strip reveal may only target the tab that already holds the active slot. `chrome.tabs.highlight` makes its first index **active**, so any other target steals focus.
+- A stolen slot fires another activation and hands the next stale pass its own write. That loop is why focus used to bounce between two groups after a close.
 - Ordering is independent of `collapseOnSwitch`: it works with collapse off.
 
 ## Focus restore on close
