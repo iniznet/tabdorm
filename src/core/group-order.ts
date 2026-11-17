@@ -6,6 +6,21 @@
 /** Chromium's "not in a group" id. */
 const GROUP_NONE = -1;
 
+/** The strip facts the ordering plan needs; `chrome.tabs.Tab` satisfies it. */
+export interface StripTab {
+  id?: number | undefined;
+  groupId: number;
+  index: number;
+  active?: boolean | undefined;
+}
+
+/** The single write one activation pass may still perform. */
+export interface GroupOrderPlan {
+  groupId: number;
+  /** Index for `chrome.tabGroups.move`, or null when the group already sits there. */
+  moveTo: number | null;
+}
+
 /**
  * Pure: the `chrome.tabGroups.move` index for a group, or null when the group
  * already sits at the requested end (a redundant move rebuilds the strip and fires
@@ -21,6 +36,32 @@ export function orderTargetIndex(
   if (position < 0) return null;
   if (mode === 'bottom') return position === groupIdsInStripOrder.length - 1 ? null : -1;
   return position === 0 ? null : 0;
+}
+
+/**
+ * Pure: what the activation pass for `tabId` may still write, or null when that
+ * pass is stale and must write nothing.
+ *
+ * A pass awaits storage and config before it writes, so the reader may have moved
+ * on by then: closing one tab fires two activations in the same window. A stale
+ * write reorders a group the reader has left, and its strip reveal takes the
+ * active slot back — which fires another activation and hands that pass its own
+ * stale write. Null is the refusal, and it is why the strip settles.
+ */
+export function planActiveGroupOrder(
+  mode: string,
+  tabs: readonly StripTab[],
+  tabId: number,
+): GroupOrderPlan | null {
+  if (mode !== 'top' && mode !== 'bottom') return null;
+  const target = tabs.find((tab) => tab.id === tabId);
+  if (target === undefined) return null;
+  if (target.groupId < 0) return null;
+  if (target.active !== true) return null;
+  return {
+    groupId: target.groupId,
+    moveTo: orderTargetIndex(mode, groupIdsInStripOrder(tabs), target.groupId),
+  };
 }
 
 /**
