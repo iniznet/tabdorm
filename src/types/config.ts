@@ -127,9 +127,9 @@ export interface TabDormConfig {
     restoreAsDiscarded: boolean;
     restoreGroupsCollapsed: boolean;
     clampToBounds: boolean;
-    /** Re-discard tabs that were asleep at close time after Chrome's native Ctrl+Shift+T window restore. */
+    /** Re-discard the tabs that were asleep when Chrome rebuilds a strip: a browser start or a Ctrl+Shift+T reopen. */
     nativeRestoreGuard: boolean;
-    /** A closed_window snapshot older than this never matches a newly opened window. */
+    /** Ctrl+Shift+T only: a snapshot older than this never matches a newly created window. A browser start has no age cutoff. */
     nativeRestoreGuardWindowMinutes: number;
     /** A window with fewer than this many tabs is never guard-matched. */
     nativeRestoreGuardMinTabs: number;

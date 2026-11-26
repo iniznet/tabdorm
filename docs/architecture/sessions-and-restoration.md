@@ -31,13 +31,30 @@ Restoring a 50+ tab session never blocks the CPU:
 
 ## Native restore guard
 
-Chrome's Ctrl+Shift+T recreates a closed window and starts loading every tab — extension-driven
-discard state does not survive the round trip. `core/restore-guard.ts` matches a newly created
-window positionally (normalized URLs, count within tolerance) against the newest `closed_window`
-sessions and re-discards the background tabs that were asleep at close time through
-`discardTabSafe`; tabs still mid-load fall through to the Discard Race Guard. TabDorm's own
-paced restoration marks its windows self-restored, so the guard never fights
-`restoration.restoreAsDiscarded`. Knobs live under `restoration.nativeRestoreGuard*`.
+Chrome rebuilds a tab strip from persisted state on two occasions and loads every tab each time —
+extension-driven discard state survives neither trip. `core/restore-guard.ts` matches the live
+strip positionally (normalized URLs, count within tolerance) against stored snapshots and
+re-discards the background tabs that were asleep through `discardTabSafe`; a tab still mid-load
+falls through to the Discard Race Guard and is discarded once its document commits.
+
+- **Browser start** — `chrome.runtime.onStartup`, once per browser run (a `chrome.storage.session`
+  marker, wiped on restart), up to three passes 2 s apart so a strip still streaming in gets
+  matched once its tabs arrive. The restored windows exist before this worker registers its
+  listeners, so `windows.onCreated` never fires for them.
+- **Ctrl+Shift+T** — `chrome.windows.onCreated`: one window matched against snapshots newer than
+  `nativeRestoreGuardWindowMinutes`.
+
+Candidates are the newest `closed_window` **and** `auto_snapshot` rows. A killed browser writes no
+`closed_window` row at all (`windows.onRemoved` never fires), which makes the periodic auto
+snapshot the record of its last strip. No age cutoff applies at browser start, because the
+browser may have been closed overnight: the positional URL match at `nativeRestoreGuardMatchPct`
+is the gate. TabDorm's own paced restoration marks its windows self-restored, so the guard never
+fights `restoration.restoreAsDiscarded`. The matching rules are pure and Node-tested in
+`core/restore-match.ts`; the knobs live under `restoration.nativeRestoreGuard*`.
+
+**Limit:** Chrome begins loading restored tabs before any extension can run, so the first fetch of
+each tab cannot be suppressed. The guard releases the renderer at the first document commit — the
+unloaded state comes back, not a skipped request.
 
 ## TMS migration
 

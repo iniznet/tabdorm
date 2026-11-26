@@ -52,14 +52,14 @@
     />
     <Toggle
       checked={config.restoration.nativeRestoreGuard}
-      label="Keep tabs asleep on Ctrl+Shift+T"
-      hint="Reopening a closed window with the browser's own restore re-discards the tabs that were asleep when it closed, instead of loading them all."
+      label="Keep tabs asleep across a restore"
+      hint="A browser restart or a Ctrl+Shift+T reopen loads every restored tab. TabDorm puts the tabs that were asleep back to sleep instead."
       onChange={(v) => onChange((d) => (d.restoration.nativeRestoreGuard = v))}
     />
     <NumberField
       value={config.restoration.nativeRestoreGuardWindowMinutes}
       label="Guard window"
-      hint="How long after closing a window its snapshot can still match a native restore."
+      hint="Ctrl+Shift+T only: how long after closing a window its snapshot can still match. A browser start has no age limit."
       min={1}
       max={10080}
       suffix="min"
